@@ -10,7 +10,8 @@ from src.nmbs_api.web_api import start_web_server
 # Load environment variables from .env file
 load_dotenv()
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the console script"""
     parser = argparse.ArgumentParser(description="NMBS Train Data API Web Server")
     parser.add_argument("--host", default=os.getenv("API_HOST", "0.0.0.0"), 
                         help=f"Host to bind to (default: {os.getenv('API_HOST', '0.0.0.0')})")
@@ -22,3 +23,6 @@ if __name__ == "__main__":
     
     print(f"Starting NMBS Train Data API on {args.host}:{args.port}")
     start_web_server(host=args.host, port=args.port, debug=args.debug)
+
+if __name__ == "__main__":
+    main()

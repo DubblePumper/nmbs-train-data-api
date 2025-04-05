@@ -31,10 +31,15 @@ setup(
         "python-dotenv>=1.0.0",
         "cloudscraper>=1.2.71",
         "schedule>=1.1.0",
+        "flask>=2.0.0",
+        "flask-cors>=3.0.10",
+        "lxml>=4.9.0",  # For better HTML parsing with BeautifulSoup
+        "cchardet>=2.1.7",  # For better character encoding detection
     ],
     entry_points={
         "console_scripts": [
             "nmbs-data-service=service:main",
+            "nmbs-web-api=run_web_api:main",
         ],
     },
 )

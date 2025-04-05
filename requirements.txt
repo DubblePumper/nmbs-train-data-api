@@ -8,3 +8,5 @@ cloudscraper>=1.2.71
 schedule>=1.1.0
 flask>=2.0.0
 flask-cors>=3.0.10
+lxml>=4.9.0
+cchardet>=2.1.7

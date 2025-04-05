@@ -29,18 +29,38 @@ def start_data_service():
     service = get_data_service()
     return service.start_background_service()
 
-def get_realtime_data(include_track_changes=True):
+def get_realtime_data():
     """
-    Get the latest real-time NMBS data
+    Get the latest real-time NMBS data with track changes
     
-    Args:
-        include_track_changes (bool): Whether to include track change information
-        
     Returns:
         dict: The GTFS real-time data as a dictionary
     """
     service = get_data_service()
-    return service.get_latest_data(include_track_changes)
+    return service.get_latest_realtime_data()
+
+def get_planning_files_list():
+    """
+    Get a list of available planning data files
+    
+    Returns:
+        list: List of available planning files
+    """
+    service = get_data_service()
+    return service.get_planning_data_list()
+
+def get_planning_file(filename):
+    """
+    Get the content of a specific planning file
+    
+    Args:
+        filename (str): Name of the file to get
+    
+    Returns:
+        dict/list/str: The file content parsed as appropriate
+    """
+    service = get_data_service()
+    return service.get_planning_data_file(filename)
 
 def force_update():
     """
@@ -51,3 +71,17 @@ def force_update():
     """
     service = get_data_service()
     return service.download_data()
+
+# Backwards compatibility for old API
+def get_latest_data(include_track_changes=True):
+    """
+    [DEPRECATED] Use get_realtime_data() instead
+    Get the latest real-time NMBS data
+    
+    Args:
+        include_track_changes (bool): Whether to include track change information
+        
+    Returns:
+        dict: The GTFS real-time data as a dictionary
+    """
+    return get_realtime_data()
