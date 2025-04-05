@@ -30,7 +30,7 @@ Maak een `.env` bestand aan in de hoofdmap met de volgende inhoud:
 
 ```
 # NMBS API Configuration
-NMBS_DATA_URL=SAMPLE_URL
+NMBS_DATA_URL=URL_GEGEVEN_DOOR_GEBRUIKER
 
 # Cloudflare Bypass Settings
 USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 OPR/117.0.0.0
@@ -230,7 +230,45 @@ Response: De trips.txt gegevens als JSON
 
 Haal de stop_times.txt gegevens op met haltetijdinformatie.
 
-Response: De stop_times.txt gegevens als JSON
+Parameters:
+- `page` (int): Paginanummer beginnend vanaf 0 (standaard: 0)
+- `limit` (int): Aantal records per pagina (standaard: 1000, max: 5000)
+- `search` (str): Zoektekst om haltetijden te filteren
+- `field` (str): Specifiek veld om in te zoeken (bijv. 'stop_id')
+- `sort_by` (str): Veld om op te sorteren (bijv. 'arrival_time')
+- `sort_direction` (str): Sorteerrichting (asc of desc)
+- `stop_id` (str): Filter op specifieke stop_id
+- `trip_id` (str): Filter op specifieke trip_id
+- `arrival_time` (str): Filter op specifieke aankomsttijd (formaat: HH:MM:SS)
+- `departure_time` (str): Filter op specifieke vertrektijd (formaat: HH:MM:SS)
+
+Response: De stop_times.txt gegevens als JSON met paginering metadata
+
+Voorbeeld:
+```json
+{
+  "data": [
+    {
+      "trip_id": "88____",
+      "arrival_time": "05:24:00",
+      "departure_time": "05:24:00",
+      "stop_id": "8861606",
+      "stop_sequence": "0",
+      "pickup_type": "0",
+      "drop_off_type": "0"
+    },
+    ...
+  ],
+  "pagination": {
+    "page": 0,
+    "pageSize": 1000,
+    "totalRecords": 125000,
+    "totalPages": 125,
+    "hasNextPage": true,
+    "hasPrevPage": false
+  }
+}
+```
 
 ### GET `/api/planningdata/calendar_dates`
 
