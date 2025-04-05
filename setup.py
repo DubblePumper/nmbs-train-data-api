@@ -34,7 +34,7 @@ setup(
         "flask>=2.0.0",
         "flask-cors>=3.0.10",
         "lxml>=4.9.0",  # For better HTML parsing with BeautifulSoup
-        "cchardet>=2.1.7",  # For better character encoding detection
+        "charset-normalizer",  # For better character encoding detection
         "pandas>=1.3.0",    # For parsing CSV and TXT files
     ],
     entry_points={

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect, abort
 from flask_cors import CORS
 import logging
 from .api import (
@@ -27,10 +27,49 @@ CORS(app)  # Enable CORS for all routes
 # Start the background data service
 data_service_thread = None
 
+# Add support for proxy headers
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# List of allowed domains
+ALLOWED_DOMAINS = ['nmbsapi.sanderzijntestjes.be', 'localhost', '127.0.0.1']
+
+# Domain validation middleware
+@app.before_request
+def validate_domain():
+    """Ensure that the API is only accessed through the proper domain name"""
+    host = request.host.split(':')[0]  # Remove port if present
+    
+    # Log the host for debugging
+    logger.debug(f"Request received from host: {host}")
+    
+    # Allow access if the host is in the allowed domains
+    if host in ALLOWED_DOMAINS:
+        return None
+    
+    # For direct IP access, we block it
+    logger.warning(f"Unauthorized access attempt from host: {host}")
+    return jsonify({
+        "error": "Access denied",
+        "message": "This API is only accessible via https://nmbsapi.sanderzijntestjes.be/",
+        "redirect": "https://nmbsapi.sanderzijntestjes.be/"
+    }), 403  # Forbidden
+
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint that redirects to the health check"""
+    return redirect('/api/health')
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Simple health check endpoint"""
-    return jsonify({"status": "healthy", "service": "NMBS Train Data API"})
+    host = request.headers.get('Host', 'unknown')
+    logger.info(f"Health check received from host: {host}")
+    return jsonify({
+        "status": "healthy", 
+        "service": "NMBS Train Data API",
+        "host": host
+    })
 
 # Realtime data endpoints
 @app.route('/api/realtime/data', methods=['GET'])
@@ -229,7 +268,7 @@ def update_data():
     else:
         return jsonify({"status": "error", "message": "Failed to update data"}), 500
 
-def start_web_server(host='0.0.0.0', port=5000, debug=False):
+def start_web_server(host='0.0.0.0', port=5000, debug=False, ssl_context=None):
     """
     Start the Flask web server
     
@@ -237,6 +276,7 @@ def start_web_server(host='0.0.0.0', port=5000, debug=False):
         host (str): Host to bind to
         port (int): Port to bind to
         debug (bool): Whether to run in debug mode
+        ssl_context: SSL context for HTTPS support, tuple of (cert, key) paths or 'adhoc'
     """
     global data_service_thread
     
@@ -247,7 +287,10 @@ def start_web_server(host='0.0.0.0', port=5000, debug=False):
     
     # Start the Flask app
     logger.info(f"Starting NMBS web API on {host}:{port}...")
-    app.run(host=host, port=port, debug=debug)
+    if ssl_context:
+        logger.info("SSL enabled. Running with HTTPS.")
+    
+    app.run(host=host, port=port, debug=debug, ssl_context=ssl_context)
 
 if __name__ == '__main__':
     start_web_server()
