@@ -39,3 +39,5 @@ ENV/
 *.swp
 *.swo
 sslKeys/
+README.md
+bfg-1.15.0.jar

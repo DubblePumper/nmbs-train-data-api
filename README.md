@@ -30,7 +30,7 @@ Maak een `.env` bestand aan in de hoofdmap met de volgende inhoud:
 
 ```
 # NMBS API Configuration
-NMBS_DATA_URL=https://www.belgiantrain.be/nl/3rd-party-services/mobility-service-providers/public-data/use-our-data
+NMBS_DATA_URL=SAMPLE_URL
 
 # Cloudflare Bypass Settings
 USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 OPR/117.0.0.0
