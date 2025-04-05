@@ -198,15 +198,26 @@ def get_translations_data():
     else:
         return jsonify({"error": "No translations data available"}), 404
 
-# Compatibility with old endpoint
+# Compatibility with old endpoint - now redirects to new endpoint with deprecation message
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """
-    [DEPRECATED] Use /api/realtime/data instead
-    Get the latest train data
+    [DEPRECATED] This endpoint is no longer available.
+    Users should migrate to the new endpoints:
+    - /api/realtime/data for real-time train data
+    - /api/planningdata/data for planning data
     """
-    logger.warning("Deprecated endpoint '/api/data' used. Please use '/api/realtime/data' instead.")
-    return get_realtime_data_endpoint()
+    logger.warning("Deprecated endpoint '/api/data' used. This endpoint is no longer supported.")
+    
+    # Return a clear error message with redirection information
+    return jsonify({
+        "error": "Endpoint deprecated",
+        "message": "The /api/data endpoint is no longer available. Please use the new endpoints:",
+        "new_endpoints": {
+            "realtime_data": request.host_url.rstrip('/') + "/api/realtime/data",
+            "planning_data": request.host_url.rstrip('/') + "/api/planningdata/data"
+        }
+    }), 410  # 410 Gone status code
 
 @app.route('/api/update', methods=['POST'])
 def update_data():

@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="nmbs-train-data-api",
-    version="0.1.0",
+    version="0.2.0",
     author="NMBS Train Data API Team",
-    author_email="your.email@example.com",
-    description="API for accessing Belgian railways (NMBS/SNCB) real-time train data",
+    author_email="Sander.truyts@gmail.com",
+    description="API for accessing Belgian railways (NMBS/SNCB) real-time and planning data",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/nmbs-train-data-api",
@@ -35,6 +35,7 @@ setup(
         "flask-cors>=3.0.10",
         "lxml>=4.9.0",  # For better HTML parsing with BeautifulSoup
         "cchardet>=2.1.7",  # For better character encoding detection
+        "pandas>=1.3.0",    # For parsing CSV and TXT files
     ],
     entry_points={
         "console_scripts": [
