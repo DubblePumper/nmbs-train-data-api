@@ -49,18 +49,27 @@ def get_planning_files_list():
     service = get_data_service()
     return service.get_planning_data_list()
 
-def get_planning_file(filename):
+def get_planning_file(filename, page=0, page_size=1000, search_params=None):
     """
     Get the content of a specific planning file
     
     Args:
         filename (str): Name of the file to get
+        page (int): Page number (0-based) for paginated results
+        page_size (int): Number of records per page
+        search_params (dict): Optional search parameters to filter results
+            {
+                'search': {'query': str, 'field': str},
+                'filters': {'field_name': 'value'},
+                'sort': {'field': str, 'direction': 'asc'|'desc'}
+            }
     
     Returns:
         dict/list/str: The file content parsed as appropriate
     """
     service = get_data_service()
-    return service.get_planning_data_file(filename)
+    # Call the enhanced get_planning_data_file method with all parameters
+    return service.get_planning_data_file(filename, page, page_size, search_params)
 
 def force_update():
     """

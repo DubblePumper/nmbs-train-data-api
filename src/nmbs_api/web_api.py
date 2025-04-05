@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, redirect, abort
 from flask_cors import CORS
 import logging
+import traceback
 from .api import (
     get_realtime_data, 
     start_data_service, 
@@ -122,6 +123,76 @@ def get_all_planning_data():
         "endpoints": file_urls
     })
 
+def _extract_request_params():
+    """
+    Extract and validate common request parameters for data endpoints
+    
+    Returns:
+        dict: A dictionary with validated parameters
+    """
+    # Get pagination parameters
+    try:
+        page = int(request.args.get('page', 0))
+        if page < 0:
+            page = 0
+    except ValueError:
+        page = 0
+        
+    try:
+        page_size = int(request.args.get('limit', 1000))
+        # Limit page size to reasonable value (between 1 and 5000)
+        if page_size < 1:
+            page_size = 1
+        elif page_size > 5000:
+            page_size = 5000
+    except ValueError:
+        page_size = 1000
+    
+    # Search parameters
+    search_query = request.args.get('search', None)
+    search_field = request.args.get('field', None)
+    
+    # Specific filter parameters for common GTFS fields
+    filters = {}
+    
+    # Stop-related filters
+    if request.args.get('stop_id'):
+        filters['stop_id'] = request.args.get('stop_id')
+    if request.args.get('stop_name'):
+        filters['stop_name'] = request.args.get('stop_name')
+    
+    # Trip and route filters
+    if request.args.get('trip_id'):
+        filters['trip_id'] = request.args.get('trip_id')
+    if request.args.get('route_id'):
+        filters['route_id'] = request.args.get('route_id')
+    
+    # Time filters for stop_times
+    if request.args.get('arrival_time'):
+        filters['arrival_time'] = request.args.get('arrival_time')
+    if request.args.get('departure_time'):
+        filters['departure_time'] = request.args.get('departure_time')
+    
+    # Sort parameters
+    sort_by = request.args.get('sort_by', None)
+    sort_direction = request.args.get('sort_direction', 'asc').lower()
+    if sort_direction not in ['asc', 'desc']:
+        sort_direction = 'asc'
+    
+    return {
+        'page': page,
+        'page_size': page_size,
+        'search': {
+            'query': search_query,
+            'field': search_field
+        },
+        'filters': filters,
+        'sort': {
+            'field': sort_by,
+            'direction': sort_direction
+        }
+    }
+
 @app.route('/api/planningdata/<filename>', methods=['GET'])
 def get_specific_planning_file(filename):
     """
@@ -129,7 +200,19 @@ def get_specific_planning_file(filename):
     
     Args:
         filename: The name of the file to fetch (with or without extension)
+        
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter records
+        field (str): Specific field to search in
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+        stop_id, trip_id, etc: Direct field filters
     """
+    # Extract request parameters
+    params = _extract_request_params()
+    
     # Check if filename already has an extension
     if '.' not in filename:
         # Check for various extensions
@@ -156,86 +239,336 @@ def get_specific_planning_file(filename):
         
         filename = found_file
     
-    # Get the file content
-    data = get_planning_file(filename)
-    
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": f"Could not parse planning file '{filename}'"}), 404
+    try:
+        # Log request details
+        logger.info(f"Fetching planning file: {filename}")
+        logger.info(f"Pagination: page={params['page']}, limit={params['page_size']}")
+        if params['search']['query']:
+            logger.info(f"Search: {params['search']['query']} in field {params['search']['field']}")
+        if params['filters']:
+            logger.info(f"Filters: {params['filters']}")
+        
+        # Get the file content with pagination
+        data = get_planning_file(
+            filename, 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": f"Could not parse planning file '{filename}'"}), 404
+    except Exception as e:
+        logger.error(f"Error processing request for file {filename}: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": f"Error processing request", 
+            "message": str(e)
+        }), 500
 
 # Direct endpoints for common GTFS files
 @app.route('/api/planningdata/stops', methods=['GET'])
 def get_stops_data():
-    """Get the stops.txt data with station information"""
-    data = get_planning_file('stops.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No stops data available"}), 404
+    """
+    Get the stops.txt data with station information
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter stops by name or ID
+        field (str): Specific field to search in (e.g., 'stop_name')
+        sort_by (str): Field to sort by (e.g., 'stop_name')
+        sort_direction (str): Sort direction (asc or desc)
+        stop_id (str): Filter by specific stop_id
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'stops.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No stops data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching stops data: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/routes', methods=['GET'])
 def get_routes_data():
-    """Get the routes.txt data with route information"""
-    data = get_planning_file('routes.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No routes data available"}), 404
+    """
+    Get the routes.txt data with route information
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter routes
+        field (str): Specific field to search in (e.g., 'route_long_name')
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+        route_id (str): Filter by specific route_id
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'routes.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No routes data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching routes data: {str(e)}")
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/calendar', methods=['GET'])
 def get_calendar_data():
-    """Get the calendar.txt data with service calendar information"""
-    data = get_planning_file('calendar.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No calendar data available"}), 404
+    """
+    Get the calendar.txt data with service calendar information
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter calendar entries
+        field (str): Specific field to search in
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'calendar.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No calendar data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching calendar data: {str(e)}")
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/trips', methods=['GET'])
 def get_trips_data():
-    """Get the trips.txt data with trip information"""
-    data = get_planning_file('trips.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No trips data available"}), 404
+    """
+    Get the trips.txt data with trip information
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter trips
+        field (str): Specific field to search in
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+        route_id (str): Filter by specific route_id
+        trip_id (str): Filter by specific trip_id
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'trips.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No trips data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching trips data: {str(e)}")
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/stop_times', methods=['GET'])
 def get_stop_times_data():
-    """Get the stop_times.txt data with stop time information"""
-    data = get_planning_file('stop_times.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No stop times data available"}), 404
+    """
+    Get the stop_times.txt data with stop time information
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter stop times
+        field (str): Specific field to search in (e.g., 'stop_id')
+        sort_by (str): Field to sort by (e.g., 'arrival_time')
+        sort_direction (str): Sort direction (asc or desc)
+        stop_id (str): Filter by specific stop_id
+        trip_id (str): Filter by specific trip_id
+        arrival_time (str): Filter by specific arrival time (format: HH:MM:SS)
+        departure_time (str): Filter by specific departure time (format: HH:MM:SS)
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Log the request details for stop_times due to its size
+        logger.info(f"Stop Times request - page: {params['page']}, limit: {params['page_size']}")
+        if params['filters']:
+            logger.info(f"Stop Times filters: {params['filters']}")
+        
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'stop_times.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No stop times data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching stop_times data: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/calendar_dates', methods=['GET'])
 def get_calendar_dates_data():
-    """Get the calendar_dates.txt data with exception dates"""
-    data = get_planning_file('calendar_dates.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No calendar dates data available"}), 404
+    """
+    Get the calendar_dates.txt data with exception dates
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter calendar dates
+        field (str): Specific field to search in
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'calendar_dates.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No calendar dates data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching calendar_dates data: {str(e)}")
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/agency', methods=['GET'])
 def get_agency_data():
-    """Get the agency.txt data with agency information"""
-    data = get_planning_file('agency.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No agency data available"}), 404
+    """
+    Get the agency.txt data with agency information
+    
+    Query Parameters:
+        search (str): Search text to filter agencies
+        field (str): Specific field to search in
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'agency.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No agency data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching agency data: {str(e)}")
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 @app.route('/api/planningdata/translations', methods=['GET'])
 def get_translations_data():
-    """Get the translations.txt data with translation information"""
-    data = get_planning_file('translations.txt')
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No translations data available"}), 404
+    """
+    Get the translations.txt data with translation information
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 1000, max: 5000)
+        search (str): Search text to filter translations
+        field (str): Specific field to search in
+        sort_by (str): Field to sort by
+        sort_direction (str): Sort direction (asc or desc)
+    """
+    # Extract request parameters
+    params = _extract_request_params()
+    
+    try:
+        # Get the data with pagination and search parameters
+        data = get_planning_file(
+            'translations.txt', 
+            page=params['page'], 
+            page_size=params['page_size'],
+            search_params=params
+        )
+        
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No translations data available"}), 404
+    except Exception as e:
+        logger.error(f"Error fetching translations data: {str(e)}")
+        return jsonify({
+            "error": "Error processing request", 
+            "message": str(e)
+        }), 500
 
 # Compatibility with old endpoint - now redirects to new endpoint with deprecation message
 @app.route('/api/data', methods=['GET'])
