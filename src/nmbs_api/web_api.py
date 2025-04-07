@@ -2,6 +2,10 @@ from flask import Flask, jsonify, request, redirect, abort
 from flask_cors import CORS
 import logging
 import traceback
+import json
+import os
+import threading
+import time
 from .api import (
     get_realtime_data, 
     start_data_service, 
@@ -27,6 +31,77 @@ CORS(app)  # Enable CORS for all routes
 
 # Start the background data service
 data_service_thread = None
+
+# Cache for endpoints data
+data_dir = "data"
+cache_data = {}
+cache_lock = threading.Lock()
+
+# Ensure data directory exists
+os.makedirs(data_dir, exist_ok=True)
+
+def update_cache():
+    """
+    Updates the cache for all endpoints with first 25 records every 2 minutes
+    """
+    logger.info("Starting cache update thread")
+    while True:
+        try:
+            # Get list of planning files
+            files = get_planning_files_list()
+            
+            # Initialize combined cache data
+            combined_cache = {
+                "realtime": None,
+                "planning_data": {}
+            }
+            
+            # Get realtime data for cache
+            realtime_data = get_realtime_data()
+            if realtime_data:
+                with cache_lock:
+                    cache_data['realtime'] = realtime_data
+                combined_cache["realtime"] = realtime_data
+                logger.info("Added realtime data to combined cache")
+            
+            # Get first 25 records for each planning file
+            for file in files:
+                file_name = file.split('.')[0]  # Remove extension
+                try:
+                    # Get the data with pagination (first 25 records)
+                    params = {
+                        'page': 0,
+                        'page_size': 25,
+                        'search': {'query': None, 'field': None},
+                        'filters': {},
+                        'sort': {'field': None, 'direction': 'asc'}
+                    }
+                    
+                    data = get_planning_file(file, page=0, page_size=25, search_params=params)
+                    
+                    if data:
+                        with cache_lock:
+                            cache_data[file_name] = data
+                        combined_cache["planning_data"][file_name] = data
+                        logger.info(f"Added {file_name} data to combined cache")
+                except Exception as e:
+                    logger.error(f"Error updating cache for {file_name}: {str(e)}")
+            
+            # Save combined data directly to the data folder
+            with open(os.path.join(data_dir, "short-test-data.json"), 'w') as f:
+                json.dump(combined_cache, f)
+            logger.info("Updated short-test-data.json with all cached data")
+            
+            # Wait for 2 minutes
+            time.sleep(120)
+        except Exception as e:
+            logger.error(f"Error in cache update thread: {str(e)}")
+            logger.error(traceback.format_exc())
+            time.sleep(30)  # Shorter delay if error occurred
+
+# Start cache update thread
+cache_thread = threading.Thread(target=update_cache, daemon=True)
+cache_thread.start()
 
 # Add support for proxy headers
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -567,6 +642,71 @@ def get_translations_data():
         logger.error(f"Error fetching translations data: {str(e)}")
         return jsonify({
             "error": "Error processing request", 
+            "message": str(e)
+        }), 500
+
+@app.route('/api/cache/<data_type>', methods=['GET'])
+def get_cached_data(data_type):
+    """
+    Get cached data (first 25 records) for faster access
+    
+    Args:
+        data_type: The type of data to retrieve (e.g., stops, routes, realtime)
+    """
+    try:
+        # Check if the cache file exists
+        cache_file = os.path.join(data_dir, f"{data_type}_cache.json")
+        
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                cached_data = json.load(f)
+            
+            logger.info(f"Returned cached data for {data_type}")
+            return jsonify(cached_data)
+        else:
+            # Check if we have it in memory
+            with cache_lock:
+                if data_type in cache_data:
+                    logger.info(f"Returned in-memory cached data for {data_type}")
+                    return jsonify(cache_data[data_type])
+            
+            # If not in cache, return a message
+            return jsonify({
+                "error": f"No cached data available for {data_type}",
+                "message": "The cache is updated every 2 minutes. Try again later or use the full data endpoint."
+            }), 404
+    except Exception as e:
+        logger.error(f"Error retrieving cached data for {data_type}: {str(e)}")
+        return jsonify({
+            "error": "Error retrieving cached data",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/cache', methods=['GET'])
+def get_available_cache():
+    """
+    Get a list of available cached data types
+    """
+    try:
+        cache_files = [f.replace('_cache.json', '') for f in os.listdir(data_dir) if f.endswith('_cache.json')]
+        
+        # Create a response with URLs to each cache endpoint
+        base_url = request.host_url.rstrip('/')
+        cache_urls = {}
+        
+        for cache_type in cache_files:
+            cache_urls[cache_type] = f"{base_url}/api/cache/{cache_type}"
+        
+        return jsonify({
+            "message": "Cached data available (first 25 records of each type)",
+            "cache_types": cache_files,
+            "endpoints": cache_urls,
+            "update_frequency": "Every 2 minutes"
+        })
+    except Exception as e:
+        logger.error(f"Error retrieving available cache: {str(e)}")
+        return jsonify({
+            "error": "Error retrieving available cache",
             "message": str(e)
         }), 500
 

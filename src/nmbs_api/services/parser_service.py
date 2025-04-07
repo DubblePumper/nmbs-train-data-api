@@ -152,54 +152,67 @@ class ParserService(BaseService):
         """
         logger.info(f"Verwerken van klein bestand: {file_path}")
         
-        try:
-            # Try to parse with pandas for better performance on smaller files
-            df = pd.read_csv(file_path)
-            
-            # Apply filtering if specified
-            df = self._apply_filters_to_dataframe(df, search_params)
-            
-            # Get total record count after filtering
-            total_records = len(df)
-            total_pages = (total_records + page_size - 1) // page_size if page_size > 0 else 1
-            
-            # Apply pagination
-            start_idx = page * page_size
-            end_idx = min(start_idx + page_size, total_records)
-            
-            # Slice the dataframe
-            df_page = df.iloc[start_idx:end_idx]
-            
-            # Convert to list of dictionaries
-            data = json.loads(df_page.to_json(orient='records'))
-            
-            # Return paginated response with metadata
-            return {
-                "data": data,
-                "pagination": {
-                    "page": page,
-                    "pageSize": page_size,
-                    "totalRecords": total_records,
-                    "totalPages": total_pages,
-                    "hasNextPage": page < total_pages - 1,
-                    "hasPrevPage": page > 0
+        # List of encodings to try, in order
+        encodings_to_try = ['utf-8', 'latin-1', 'windows-1252', 'iso-8859-1']
+        
+        for encoding in encodings_to_try:
+            try:
+                # Try to parse with pandas for better performance on smaller files
+                df = pd.read_csv(file_path, encoding=encoding)
+                logger.info(f"Successfully parsed file using {encoding} encoding")
+                
+                # Apply filtering if specified
+                df = self._apply_filters_to_dataframe(df, search_params)
+                
+                # Get total record count after filtering
+                total_records = len(df)
+                total_pages = (total_records + page_size - 1) // page_size if page_size > 0 else 1
+                
+                # Apply pagination
+                start_idx = page * page_size
+                end_idx = min(start_idx + page_size, total_records)
+                
+                # Slice the dataframe
+                df_page = df.iloc[start_idx:end_idx]
+                
+                # Convert to list of dictionaries
+                data = json.loads(df_page.to_json(orient='records'))
+                
+                # Return paginated response with metadata
+                return {
+                    "data": data,
+                    "pagination": {
+                        "page": page,
+                        "pageSize": page_size,
+                        "totalRecords": total_records,
+                        "totalPages": total_pages,
+                        "hasNextPage": page < total_pages - 1,
+                        "hasPrevPage": page > 0
+                    }
                 }
-            }
-            
-        except Exception as e:
-            logger.error(f"Fout bij parsen van bestand met pandas: {str(e)}")
-            logger.error(traceback.format_exc())
-            
-            # Fall back to CSV reader if pandas fails
+                
+            except UnicodeDecodeError:
+                # Try the next encoding
+                logger.warning(f"Failed to parse file with {encoding}, trying next encoding")
+                continue
+            except Exception as e:
+                logger.error(f"Fout bij parsen van bestand met pandas met {encoding} encoding: {str(e)}")
+                # For non-encoding errors, continue to fallback method
+                break
+        
+        # Fall back to CSV reader if pandas fails with all encodings
+        for encoding in encodings_to_try:
             try:
                 # Read the entire file
                 data = []
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, 'r', encoding=encoding) as f:
                     reader = csv.DictReader(f)
                     field_names = reader.fieldnames
                     
                     for row in reader:
                         data.append(dict(row))
+                
+                logger.info(f"Successfully parsed file using fallback CSV reader with {encoding} encoding")
                 
                 # Apply filtering
                 filtered_data = self._apply_filters_to_list(data, search_params)
@@ -227,11 +240,18 @@ class ParserService(BaseService):
                         "hasPrevPage": page > 0
                     }
                 }
-                
-            except Exception as e2:
-                logger.error(f"Fall-back CSV parsing mislukt: {str(e2)}")
-                logger.error(traceback.format_exc())
-                return None
+            
+            except UnicodeDecodeError:
+                # Try the next encoding
+                logger.warning(f"Fallback CSV parsing failed with {encoding}, trying next encoding")
+                continue
+            except Exception as e:
+                logger.error(f"Fall-back CSV parsing mislukt met {encoding}: {str(e)}")
+                continue
+        
+        # If all methods fail, return error
+        logger.error(f"Failed to parse file with all encoding methods")
+        return None
     
     def _parse_large_file_with_advanced_features(self, file_path, page=0, page_size=1000, search_params=None):
         """
@@ -278,108 +298,121 @@ class ParserService(BaseService):
         """
         logger.info(f"Optimale memory-mapped paginering: pagina {page}, grootte {page_size} voor bestand {file_path}")
         
-        try:
-            # Count total lines with optimized method
-            with open(file_path, 'rb') as f:
-                # Use mmap for more efficient line counting
-                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-                total_lines = 0
-                for _ in iter(mm.readline, b''):
-                    total_lines += 1
-                mm.close()
-            
-            # Adjust for header
-            total_lines -= 1
-            total_pages = (total_lines + page_size - 1) // page_size  # Ceiling division
-            
-            logger.info(f"Bestand heeft {total_lines} regels, {total_pages} pagina's")
-            
-            # Read the header only - more efficient
-            with open(file_path, 'r', encoding='utf-8') as f:
-                header = f.readline().strip().split(',')
-            
-            # Skip to the correct page and read only needed lines
-            start_line = page * page_size + 1  # +1 for header
-            end_line = start_line + page_size
-            
-            # Limit to actual file size
-            end_line = min(end_line, total_lines + 1)  # +1 because file lines are 1-indexed
-            
-            logger.info(f"Memory-efficiënt lezen van regels {start_line} tot {end_line}")
-            
-            # Read the data more efficiently
-            data = []
-            current_line = 0
-            
-            with open(file_path, 'r', encoding='utf-8') as f:
-                # Skip header line
-                next(f)
+        # List of encodings to try, in order
+        encodings_to_try = ['utf-8', 'latin-1', 'windows-1252', 'iso-8859-1']
+        
+        for encoding in encodings_to_try:
+            try:
+                # Count total lines with optimized method
+                with open(file_path, 'rb') as f:
+                    # Use mmap for more efficient line counting
+                    mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+                    total_lines = 0
+                    for _ in iter(mm.readline, b''):
+                        total_lines += 1
+                    mm.close()
                 
-                # Using file seek to jump ahead if possible
-                if start_line > 100:  # Only worth doing for larger offsets
-                    # Read in chunks to find the right position
-                    chunk_size = 100000
-                    current_pos = f.tell()
-                    chunk = f.read(chunk_size)
-                    newlines_count = 0
+                # Adjust for header
+                total_lines -= 1
+                total_pages = (total_lines + page_size - 1) // page_size  # Ceiling division
+                
+                logger.info(f"Bestand heeft {total_lines} regels, {total_pages} pagina's")
+                
+                # Read the header only - more efficient
+                with open(file_path, 'r', encoding=encoding) as f:
+                    header = f.readline().strip().split(',')
+                
+                # Skip to the correct page and read only needed lines
+                start_line = page * page_size + 1  # +1 for header
+                end_line = start_line + page_size
+                
+                # Limit to actual file size
+                end_line = min(end_line, total_lines + 1)  # +1 because file lines are 1-indexed
+                
+                logger.info(f"Memory-efficiënt lezen van regels {start_line} tot {end_line} met {encoding} encoding")
+                
+                # Read the data more efficiently
+                data = []
+                
+                with open(file_path, 'r', encoding=encoding) as f:
+                    # Skip header line
+                    next(f)
                     
-                    # Count newlines and advance position until we're close to our target
-                    while newlines_count < start_line - 1 and chunk:
-                        newlines_in_chunk = chunk.count('\n')
-                        if newlines_count + newlines_in_chunk >= start_line - 1:
-                            # We're close enough, read line by line from here
-                            excess = newlines_count + newlines_in_chunk - (start_line - 1)
-                            f.seek(current_pos + chunk.rfind('\n', 0, len(chunk) - excess) + 1)
-                            for _ in range(excess):
-                                next(f, None)
-                            newlines_count = start_line - 1
-                            break
-                        
-                        newlines_count += newlines_in_chunk
+                    # Using file seek to jump ahead if possible
+                    if start_line > 100:  # Only worth doing for larger offsets
+                        # Read in chunks to find the right position
+                        chunk_size = 100000
                         current_pos = f.tell()
                         chunk = f.read(chunk_size)
+                        newlines_count = 0
                         
-                    # If we didn't find enough newlines, reset and do it the slow way
-                    if newlines_count < start_line - 1:
-                        f.seek(0)
-                        next(f)  # Skip header
+                        # Count newlines and advance position until we're close to our target
+                        while newlines_count < start_line - 1 and chunk:
+                            newlines_in_chunk = chunk.count('\n')
+                            if newlines_count + newlines_in_chunk >= start_line - 1:
+                                # We're close enough, read line by line from here
+                                excess = newlines_count + newlines_in_chunk - (start_line - 1)
+                                f.seek(current_pos + chunk.rfind('\n', 0, len(chunk) - excess) + 1)
+                                for _ in range(excess):
+                                    next(f, None)
+                                newlines_count = start_line - 1
+                                break
+                            
+                            newlines_count += newlines_in_chunk
+                            current_pos = f.tell()
+                            chunk = f.read(chunk_size)
+                            
+                        # If we didn't find enough newlines, reset and do it the slow way
+                        if newlines_count < start_line - 1:
+                            f.seek(0)
+                            next(f)  # Skip header
+                            for _ in range(start_line - 1):
+                                next(f, None)
+                    else:
+                        # For small offsets, just read line by line
                         for _ in range(start_line - 1):
                             next(f, None)
-                else:
-                    # For small offsets, just read line by line
-                    for _ in range(start_line - 1):
-                        next(f, None)
-                
-                # Read required lines and convert to dictionaries
-                for i in range(end_line - start_line):
-                    line = next(f, None)
-                    if line is None:
-                        break
                     
-                    # Process line into dict
-                    row = dict(zip(header, line.strip().split(',')))
-                    data.append(row)
-            
-            # Force garbage collection to free memory
-            gc.collect()
-            
-            # Return paginated response with metadata
-            return {
-                "data": data,
-                "pagination": {
-                    "page": page,
-                    "pageSize": page_size,
-                    "totalRecords": total_lines,
-                    "totalPages": total_pages,
-                    "hasNextPage": page < total_pages - 1,
-                    "hasPrevPage": page > 0
+                    # Read required lines and convert to dictionaries
+                    for i in range(end_line - start_line):
+                        line = next(f, None)
+                        if line is None:
+                            break
+                        
+                        # Process line into dict
+                        row = dict(zip(header, line.strip().split(',')))
+                        data.append(row)
+                
+                # Force garbage collection to free memory
+                gc.collect()
+                
+                logger.info(f"Successfully parsed large file using {encoding} encoding")
+                
+                # Return paginated response with metadata
+                return {
+                    "data": data,
+                    "pagination": {
+                        "page": page,
+                        "pageSize": page_size,
+                        "totalRecords": total_lines,
+                        "totalPages": total_pages,
+                        "hasNextPage": page < total_pages - 1,
+                        "hasPrevPage": page > 0
+                    }
                 }
-            }
-            
-        except Exception as e:
-            logger.error(f"Fout bij optimale paginering van bestand: {str(e)}")
-            logger.error(traceback.format_exc())
-            return None
+                
+            except UnicodeDecodeError:
+                # Try the next encoding
+                logger.warning(f"Failed to parse large file with {encoding}, trying next encoding")
+                continue
+            except Exception as e:
+                logger.error(f"Fout bij optimale paginering van bestand met {encoding} encoding: {str(e)}")
+                logger.error(traceback.format_exc())
+                continue
+        
+        # If all methods fail, return error
+        logger.error(f"Failed to parse large file with all encoding methods")
+        return None
     
     def _parse_large_file_with_streaming_filters(self, file_path, page=0, page_size=1000, search_params=None):
         """
@@ -389,100 +422,119 @@ class ParserService(BaseService):
         """
         logger.info(f"Streaming verwerking met filters voor bestand: {file_path}")
         
-        try:
-            # Read the header
-            with open(file_path, 'r', encoding='utf-8') as f:
-                header = f.readline().strip().split(',')
-            
-            # Determine if we're filtering on stop_id or trip_id, which are common in stop_times.txt
-            key_filters = {}
-            for field, value in search_params['filters'].items():
-                if field in ['stop_id', 'trip_id', 'route_id']:
-                    key_filters[field] = str(value)
-            
-            # If we have key filters, we can be more efficient by reading only chunks
-            # that might contain matching records
-            if key_filters:
-                logger.info(f"Efficiënte filtering op sleutelvelden: {key_filters}")
-                return self._parse_with_key_filters(file_path, header, page, page_size, search_params, key_filters)
-            
-            # Otherwise, process with streaming but need to check every row
-            filtered_count = 0
-            filtered_data = []
-            
-            # First pass: count matching records to determine total pages
-            with open(file_path, 'r', encoding='utf-8') as f:
-                next(f)  # Skip header
+        # List of encodings to try, in order
+        encodings_to_try = ['utf-8', 'latin-1', 'windows-1252', 'iso-8859-1']
+        
+        for encoding in encodings_to_try:
+            try:
+                # Read the header
+                with open(file_path, 'r', encoding=encoding) as f:
+                    header = f.readline().strip().split(',')
                 
-                for line in f:
-                    row = dict(zip(header, line.strip().split(',')))
+                # Determine if we're filtering on stop_id or trip_id, which are common in stop_times.txt
+                key_filters = {}
+                for field, value in search_params['filters'].items():
+                    if field in ['stop_id', 'trip_id', 'route_id']:
+                        key_filters[field] = str(value)
+                
+                # If we have key filters, we can be more efficient by reading only chunks
+                # that might contain matching records
+                if key_filters:
+                    logger.info(f"Efficiënte filtering op sleutelvelden: {key_filters}")
+                    result = self._parse_with_key_filters(file_path, header, page, page_size, search_params, key_filters)
+                    if result:
+                        return result
+                    else:
+                        # If key filters failed, continue with regular streaming 
+                        logger.warning(f"Key filter method failed, falling back to normal streaming")
+                
+                # Otherwise, process with streaming but need to check every row
+                filtered_count = 0
+                filtered_data = []
+                
+                # First pass: count matching records to determine total pages
+                with open(file_path, 'r', encoding=encoding) as f:
+                    next(f)  # Skip header
                     
-                    # Check if this row matches filters
-                    if self._row_matches_filters(row, search_params):
-                        filtered_count += 1
-            
-            # Calculate pagination info
-            total_records = filtered_count
-            total_pages = (total_records + page_size - 1) // page_size if page_size > 0 else 1
-            
-            # If requested page exceeds total pages, return empty result
-            if page >= total_pages and total_pages > 0:
+                    for line in f:
+                        row = dict(zip(header, line.strip().split(',')))
+                        
+                        # Check if this row matches filters
+                        if self._row_matches_filters(row, search_params):
+                            filtered_count += 1
+                
+                # Calculate pagination info
+                total_records = filtered_count
+                total_pages = (total_records + page_size - 1) // page_size if page_size > 0 else 1
+                
+                # If requested page exceeds total pages, return empty result
+                if page >= total_pages and total_pages > 0:
+                    return {
+                        "data": [],
+                        "pagination": {
+                            "page": page,
+                            "pageSize": page_size,
+                            "totalRecords": total_records,
+                            "totalPages": total_pages,
+                            "hasNextPage": False,
+                            "hasPrevPage": page > 0
+                        }
+                    }
+                
+                # Second pass: collect just the records for the requested page
+                with open(file_path, 'r', encoding=encoding) as f:
+                    next(f)  # Skip header
+                    
+                    current_filtered_idx = 0
+                    start_idx = page * page_size
+                    end_idx = start_idx + page_size
+                    
+                    for line in f:
+                        row = dict(zip(header, line.strip().split(',')))
+                        
+                        # Check if this row matches filters
+                        if self._row_matches_filters(row, search_params):
+                            if start_idx <= current_filtered_idx < end_idx:
+                                filtered_data.append(row)
+                            elif current_filtered_idx >= end_idx:
+                                break  # We've gone past what we need
+                            
+                            current_filtered_idx += 1
+                
+                # Apply sorting if needed - only to the page we're returning
+                if search_params['sort']['field']:
+                    filtered_data = self._apply_sorting_to_list(filtered_data, search_params)
+                
+                # Force garbage collection
+                gc.collect()
+                
+                logger.info(f"Successfully parsed file with streaming filters using {encoding} encoding")
+                
+                # Return the paginated results
                 return {
-                    "data": [],
+                    "data": filtered_data,
                     "pagination": {
                         "page": page,
                         "pageSize": page_size,
                         "totalRecords": total_records,
                         "totalPages": total_pages,
-                        "hasNextPage": False,
+                        "hasNextPage": page < total_pages - 1,
                         "hasPrevPage": page > 0
                     }
                 }
-            
-            # Second pass: collect just the records for the requested page
-            with open(file_path, 'r', encoding='utf-8') as f:
-                next(f)  # Skip header
                 
-                current_filtered_idx = 0
-                start_idx = page * page_size
-                end_idx = start_idx + page_size
-                
-                for line in f:
-                    row = dict(zip(header, line.strip().split(',')))
-                    
-                    # Check if this row matches filters
-                    if self._row_matches_filters(row, search_params):
-                        if start_idx <= current_filtered_idx < end_idx:
-                            filtered_data.append(row)
-                        elif current_filtered_idx >= end_idx:
-                            break  # We've gone past what we need
-                        
-                        current_filtered_idx += 1
-            
-            # Apply sorting if needed - only to the page we're returning
-            if search_params['sort']['field']:
-                filtered_data = self._apply_sorting_to_list(filtered_data, search_params)
-            
-            # Force garbage collection
-            gc.collect()
-            
-            # Return the paginated results
-            return {
-                "data": filtered_data,
-                "pagination": {
-                    "page": page,
-                    "pageSize": page_size,
-                    "totalRecords": total_records,
-                    "totalPages": total_pages,
-                    "hasNextPage": page < total_pages - 1,
-                    "hasPrevPage": page > 0
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"Fout bij streaming verwerking van bestand: {str(e)}")
-            logger.error(traceback.format_exc())
-            return None
+            except UnicodeDecodeError:
+                # Try the next encoding
+                logger.warning(f"Failed to parse file with streaming filters using {encoding}, trying next encoding")
+                continue
+            except Exception as e:
+                logger.error(f"Fout bij streaming verwerking van bestand met {encoding} encoding: {str(e)}")
+                logger.error(traceback.format_exc())
+                continue
+        
+        # If all methods fail, return error
+        logger.error(f"Failed to parse file with streaming filters using all encodings")
+        return None
     
     def _parse_with_key_filters(self, file_path, header, page, page_size, search_params, key_filters):
         """

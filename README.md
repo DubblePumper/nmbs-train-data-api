@@ -22,6 +22,7 @@ Een zelfstandige API voor het verkrijgen van real-time en planningsgegevens van 
   - [Als zelfstandige service](#als-zelfstandige-service)
   - [Als Web API](#als-web-api)
   - [In je applicatie](#in-je-applicatie)
+  - [Caching van data](#caching-van-data)
   - [Toegang vanuit Pelican Panel](#toegang-vanuit-pelican-panel)
 - [Service-opties](#service-opties)
 - [API Referentie](#api-referentie)
@@ -114,6 +115,10 @@ stops_data = get_planning_file('stops.txt')
 # Verwerk de gegevens...
 # De gegevens worden automatisch up-to-date gehouden door de achtergrondservice
 ```
+
+### Caching van data
+
+Wanneer de API draait, worden automatisch de eerste 25 records van elk endpoint opgeslagen in een JSON-bestand. Dit cachebestand wordt elke 2 minuten bijgewerkt om de gegevens actueel te houden zonder de server te belasten. Deze functie zorgt voor snellere responstijden bij veelgebruikte verzoeken.
 
 ### Toegang vanuit Pelican Panel
 
@@ -377,6 +382,7 @@ A standalone API for retrieving real-time and scheduling data from the Belgian r
   - [As a Standalone Service](#as-a-standalone-service)
   - [As a Web API](#as-a-web-api)
   - [In Your Application](#in-your-application)
+  - [Caching Data](#caching-data)
   - [Access from Pelican Panel](#access-from-pelican-panel)
 - [Service Options](#service-options)
 - [API Reference](#api-reference)
@@ -469,6 +475,10 @@ stops_data = get_planning_file('stops.txt')
 # Process the data...
 # The data is automatically kept up-to-date by the background service
 ```
+
+### Caching Data
+
+When the API is running, the first 25 records of each endpoint are automatically stored in a JSON file. This cache file is updated every 2 minutes to keep the data current without overloading the server. This feature ensures faster response times for frequently used requests.
 
 ### Access from Pelican Panel
 
