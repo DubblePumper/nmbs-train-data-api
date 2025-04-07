@@ -202,40 +202,19 @@ Haal de nieuwste real-time treingegevens op met spoorwijzigingen.
 
 **Response:** De GTFS real-time gegevens als JSON
 
-### GET `/api/planningdata/data`
-
-Haal een overzicht op van alle beschikbare planningsgegevens.
-
-**Response:**
-```json
-{
-  "message": "Planning data available at the following endpoints",
-  "files": ["stops.txt", "routes.txt", "calendar.txt", ...],
-  "endpoints": {
-    "stops": "http://<server-ip>:<port>/api/planningdata/stops",
-    "routes": "http://<server-ip>:<port>/api/planningdata/routes",
-    ...
-  }
-}
-```
-
-### GET `/api/planningdata/files`
-
-Haal een lijst op van alle beschikbare planningsdatabestanden.
-
-**Response:**
-```json
-{
-  "files": ["stops.txt", "routes.txt", "calendar.txt", ...]
-}
-```
-
 ### GET `/api/planningdata/<filename>`
 
 Haal de inhoud van een specifiek planningsdatabestand op.
 
 **Parameters:**
 - `filename`: De naam van het op te halen bestand (met of zonder extensie)
+- `search`: Veld waarop gezocht moet worden (bijv. 'stop_name', 'route_id', etc.)
+- `<search>`: De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld
+
+**Voorbeeld:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussel
+```
 
 **Response:** De bestandsinhoud als JSON
 
@@ -243,17 +222,57 @@ Haal de inhoud van een specifiek planningsdatabestand op.
 
 Haal de stops.txt gegevens op met stationsinformatie.
 
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'stop_name') | - |
+| `stop_name` | Filter op naam van het station | - |
+| `stop_id` | Filter op station ID | - |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
+
+**Voorbeeld:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussel
+```
+
 **Response:** De stops.txt gegevens als JSON
 
 ### GET `/api/planningdata/routes`
 
 Haal de routes.txt gegevens op met route-informatie.
 
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'route_id', 'route_short_name') | - |
+| `<search>` | De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld | - |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
+
+**Voorbeeld:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/routes?search=route_short_name&route_short_name=IC
+```
+
 **Response:** De routes.txt gegevens als JSON
 
 ### GET `/api/planningdata/calendar`
 
 Haal de calendar.txt gegevens op met dienstregeling kalenderinformatie.
+
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'service_id') | - |
+| `<search>` | De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld | - |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
+
+**Voorbeeld:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/calendar?search=monday&monday=1
+```
 
 **Response:** De calendar.txt gegevens als JSON
 
@@ -562,40 +581,19 @@ Retrieve the latest real-time train data with track changes.
 
 **Response:** The GTFS real-time data as JSON
 
-### GET `/api/planningdata/data`
-
-Retrieve an overview of all available planning data.
-
-**Response:**
-```json
-{
-  "message": "Planning data available at the following endpoints",
-  "files": ["stops.txt", "routes.txt", "calendar.txt", ...],
-  "endpoints": {
-    "stops": "http://<server-ip>:<port>/api/planningdata/stops",
-    "routes": "http://<server-ip>:<port>/api/planningdata/routes",
-    ...
-  }
-}
-```
-
-### GET `/api/planningdata/files`
-
-Retrieve a list of all available planning data files.
-
-**Response:**
-```json
-{
-  "files": ["stops.txt", "routes.txt", "calendar.txt", ...]
-}
-```
-
 ### GET `/api/planningdata/<filename>`
 
 Retrieve the content of a specific planning data file.
 
 **Parameters:**
 - `filename`: The name of the file to retrieve (with or without extension)
+- `search`: Field to search in (e.g., 'stop_name', 'route_id', etc.)
+- `<search>`: The value to filter by when 'search' is set
+
+**Example:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussels
+```
 
 **Response:** The file content as JSON
 
@@ -603,17 +601,57 @@ Retrieve the content of a specific planning data file.
 
 Retrieve the stops.txt data with station information.
 
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'stop_name') | - |
+| `stop_name` | Filter by station name | - |
+| `stop_id` | Filter by station ID | - |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
+
+**Example:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussels
+```
+
 **Response:** The stops.txt data as JSON
 
 ### GET `/api/planningdata/routes`
 
 Retrieve the routes.txt data with route information.
 
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'route_id', 'route_short_name') | - |
+| `<search>` | The value to filter by when 'search' is set | - |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
+
+**Example:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/routes?search=route_short_name&route_short_name=IC
+```
+
 **Response:** The routes.txt data as JSON
 
 ### GET `/api/planningdata/calendar`
 
 Retrieve the calendar.txt data with service schedule calendar information.
+
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'service_id') | - |
+| `<search>` | The value to filter by when 'search' is set | - |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
+
+**Example:**
+```
+https://nmbsapi.sanderzijntestjes.be/api/planningdata/calendar?search=monday&monday=1
+```
 
 **Response:** The calendar.txt data as JSON
 
