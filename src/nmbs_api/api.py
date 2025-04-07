@@ -47,7 +47,7 @@ def get_planning_files_list():
         list: List of available planning files
     """
     service = get_data_service()
-    return service.get_planning_data_list()
+    return service.get_planning_files_list()
 
 def get_planning_file(filename, page=0, page_size=1000, search_params=None):
     """
