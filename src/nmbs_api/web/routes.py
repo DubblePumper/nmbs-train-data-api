@@ -5,7 +5,7 @@ import logging
 import traceback
 import json
 import os
-from flask import Blueprint, jsonify, request, redirect
+from flask import Blueprint, jsonify, request, redirect, Response
 from .utils import extract_request_params
 from ..api import (
     get_realtime_data, 
@@ -13,9 +13,22 @@ from ..api import (
     get_planning_file,
     force_update
 )
+from .cache import CacheManager
+from ..tests.test_api import test_api
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Create API blueprint
+api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+# Register test API routes
+api_bp.register_blueprint(test_api, url_prefix='/tests')
+
+@api_bp.route('/health', methods=['GET'])
+def health():
+    """Check if the API is healthy"""
+    return jsonify({'status': 'healthy'})
 
 # Create a blueprint for routes
 api_routes = Blueprint('api', __name__)
@@ -458,7 +471,7 @@ def get_data():
     }), 410  # 410 Gone status code
 
 @api_routes.route('/update', methods=['POST'])
-def update_data():
+def update_data_endpoint():
     """Force an immediate update of the data"""
     try:
         success = force_update()
