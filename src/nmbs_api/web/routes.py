@@ -5,8 +5,10 @@ import logging
 import traceback
 import json
 import os
+import datetime
 from flask import Blueprint, jsonify, request, redirect, Response
 from .utils import extract_request_params
+from .security import limiter, run_security_audit
 from ..api import (
     get_realtime_data, 
     get_planning_files_list,
@@ -25,7 +27,9 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 # Register test API routes
 api_bp.register_blueprint(test_api, url_prefix='/tests')
 
+# Apply rate limit directly to endpoints that are defined in the api_bp
 @api_bp.route('/health', methods=['GET'])
+@limiter.limit("60 per minute")
 def health():
     """Check if the API is healthy"""
     return jsonify({'status': 'healthy'})
@@ -39,6 +43,7 @@ def root():
     return redirect('/api/health')
 
 @api_routes.route('/health', methods=['GET'])
+@limiter.limit("60 per minute")
 def health_check():
     """Simple health check endpoint"""
     host = request.headers.get('Host', 'unknown')
@@ -51,6 +56,7 @@ def health_check():
 
 # Realtime data endpoints
 @api_routes.route('/realtime/data', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_realtime_data_endpoint():
     """
     Get the latest real-time train data with track changes
@@ -69,6 +75,7 @@ def get_realtime_data_endpoint():
 
 # Planning data endpoints
 @api_routes.route('/planningdata/files', methods=['GET'])
+@limiter.limit("60 per minute")
 def get_planning_files_endpoint():
     """
     Get a list of all available planning data files
@@ -85,6 +92,7 @@ def get_planning_files_endpoint():
         return jsonify({"error": "Error processing request", "message": str(e)}), 500
 
 @api_routes.route('/planningdata/data', methods=['GET'])
+@limiter.limit("60 per minute")
 def get_all_planning_data():
     """
     Get a combined response with references to all planning data endpoints
@@ -113,6 +121,7 @@ def get_all_planning_data():
         return jsonify({"error": "Error processing request", "message": str(e)}), 500
 
 @api_routes.route('/planningdata/<filename>', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_specific_planning_file(filename):
     """
     Get content from a specific planning data file
@@ -189,6 +198,7 @@ def get_specific_planning_file(filename):
 # Direct endpoints for common GTFS files with auto-filling filename extensions
 
 @api_routes.route('/planningdata/stops', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_stops_data():
     """
     Get the stops.txt data with station information
@@ -226,6 +236,7 @@ def get_stops_data():
         }), 500
 
 @api_routes.route('/planningdata/routes', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_routes_data():
     """
     Get the routes.txt data with route information
@@ -262,6 +273,7 @@ def get_routes_data():
         }), 500
 
 @api_routes.route('/planningdata/calendar', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_calendar_data():
     """
     Get the calendar.txt data with service calendar information
@@ -298,6 +310,7 @@ def get_calendar_data():
         }), 500
 
 @api_routes.route('/planningdata/trips', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_trips_data():
     """
     Get the trips.txt data with trip information
@@ -334,6 +347,7 @@ def get_trips_data():
         }), 500
 
 @api_routes.route('/planningdata/stop_times', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_stop_times_data():
     """
     Get the stop_times.txt data with stop time information
@@ -377,22 +391,26 @@ def get_stop_times_data():
 
 # Add more standard GTFS file endpoints
 @api_routes.route('/planningdata/calendar_dates', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_calendar_dates_data():
     """Get the calendar_dates.txt data with exception dates"""
     return get_specific_planning_file('calendar_dates')
 
 @api_routes.route('/planningdata/agency', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_agency_data():
     """Get the agency.txt data with carrier information"""
     return get_specific_planning_file('agency')
 
 @api_routes.route('/planningdata/translations', methods=['GET'])
+@limiter.limit("45 per minute")
 def get_translations_data():
     """Get the translations.txt data with translation information"""
     return get_specific_planning_file('translations')
 
 # Cache endpoints
 @api_routes.route('/cache/<data_type>', methods=['GET'])
+@limiter.limit("60 per minute")
 def get_cached_data(data_type):
     """
     Get cached data (first 25 records) for faster access
@@ -424,6 +442,7 @@ def get_cached_data(data_type):
         }), 500
 
 @api_routes.route('/cache', methods=['GET'])
+@limiter.limit("90 per minute")
 def get_available_cache():
     """
     Get a list of available cached data types
@@ -471,6 +490,7 @@ def get_data():
     }), 410  # 410 Gone status code
 
 @api_routes.route('/update', methods=['POST'])
+@limiter.limit("5 per minute")
 def update_data_endpoint():
     """Force an immediate update of the data"""
     try:
@@ -483,3 +503,27 @@ def update_data_endpoint():
     except Exception as e:
         logger.error(f"Error updating data: {str(e)}")
         return jsonify({"error": "Error updating data", "message": str(e)}), 500
+
+@api_routes.route('/security/audit', methods=['GET'])
+@limiter.limit("10 per minute")
+def security_audit_endpoint():
+    """
+    Run a security audit and return the results
+    
+    This endpoint provides information about the security configuration
+    of the API including rate limits, input validation, and security headers.
+    """
+    try:
+        # Run the security audit
+        audit_results = run_security_audit()
+        
+        # Return the results as JSON
+        return jsonify(audit_results)
+    except Exception as e:
+        logger.error(f"Error running security audit: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": "Error running security audit",
+            "message": str(e),
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 500
