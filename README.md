@@ -200,7 +200,22 @@ Een eenvoudig health check endpoint dat de status van de API teruggeeft.
 
 Haal de nieuwste real-time treingegevens op met spoorwijzigingen.
 
-**Response:** De GTFS real-time gegevens als JSON
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'id', 'stopId', 'timestamp') | - |
+| `<search>` | De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
+| `limit` | Maximum aantal resultaten om terug te geven | 1000 |
+
+**Voorbeelden:**
+```
+/api/realtime/data?search=id&id=88____:007::8831310:8884335:48:1050:20251212
+/api/realtime/data?search=stopId&stopId=8831310_2
+/api/realtime/data?search=timestamp&timestamp=1744361475
+```
+
+**Response:** De GTFS real-time gegevens als JSON, gefilterd op zoekparameters
 
 ### GET `/api/planningdata/<filename>`
 
@@ -210,13 +225,17 @@ Haal de inhoud van een specifiek planningsdatabestand op.
 - `filename`: De naam van het op te halen bestand (met of zonder extensie)
 - `search`: Veld waarop gezocht moet worden (bijv. 'stop_name', 'route_id', etc.)
 - `<search>`: De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld
+- `exact`: Of er exact (true) of gedeeltelijk (false) moet worden gezocht
+- `limit`: Maximum aantal resultaten om terug te geven (standaard: 1000, max: 5000)
 
-**Voorbeeld:**
+**Voorbeelden:**
 ```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussel
+/api/planningdata/stops?search=stop_name&stop_name=Brussels&exact=false
+/api/planningdata/routes?search=route_short_name&route_short_name=IC&exact=true
+/api/planningdata/calendar?search=service_id&service_id=1
 ```
 
-**Response:** De bestandsinhoud als JSON
+**Response:** De bestandsinhoud als JSON, gefilterd op zoekparameters
 
 ### GET `/api/planningdata/stops`
 
@@ -225,18 +244,24 @@ Haal de stops.txt gegevens op met stationsinformatie.
 **Parameters:**
 | Parameter | Beschrijving | Standaardwaarde |
 |-----------|--------------|-----------------|
-| `search` | Veld waarop gezocht moet worden (bijv. 'stop_name') | - |
+| `search` | Veld waarop gezocht moet worden (bijv. 'stop_name', 'stop_id', 'stop_lat', 'stop_lon') | - |
 | `stop_name` | Filter op naam van het station | - |
 | `stop_id` | Filter op station ID | - |
+| `stop_lat` | Filter op breedtegraad | - |
+| `stop_lon` | Filter op lengtegraad | - |
+| `zone_id` | Filter op zone ID | - |
+| `parent_station` | Filter op bovenliggend station | - |
+| `platform_code` | Filter op perroncode | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
 | `limit` | Aantal records per pagina | 1000 (max: 5000) |
 | `page` | Paginanummer beginnend vanaf 0 | 0 |
 
-**Voorbeeld:**
+**Voorbeelden:**
 ```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussel
+/api/planningdata/stops?search=stop_name&stop_name=Brussels
+/api/planningdata/stops?search=stop_id&stop_id=8831310
+/api/planningdata/stops?search=stop_lat&stop_lat=50.85&exact=false
 ```
-
-**Response:** De stops.txt gegevens als JSON
 
 ### GET `/api/planningdata/routes`
 
@@ -245,17 +270,15 @@ Haal de routes.txt gegevens op met route-informatie.
 **Parameters:**
 | Parameter | Beschrijving | Standaardwaarde |
 |-----------|--------------|-----------------|
-| `search` | Veld waarop gezocht moet worden (bijv. 'route_id', 'route_short_name') | - |
-| `<search>` | De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld | - |
+| `search` | Veld waarop gezocht moet worden (bijv. 'route_id', 'route_short_name', 'route_long_name') | - |
+| `route_id` | Filter op route ID | - |
+| `route_short_name` | Filter op korte naam | - |
+| `route_long_name` | Filter op lange naam | - |
+| `route_type` | Filter op routetype | - |
+| `agency_id` | Filter op agency ID | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
 | `limit` | Aantal records per pagina | 1000 (max: 5000) |
 | `page` | Paginanummer beginnend vanaf 0 | 0 |
-
-**Voorbeeld:**
-```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/routes?search=route_short_name&route_short_name=IC
-```
-
-**Response:** De routes.txt gegevens als JSON
 
 ### GET `/api/planningdata/calendar`
 
@@ -264,23 +287,38 @@ Haal de calendar.txt gegevens op met dienstregeling kalenderinformatie.
 **Parameters:**
 | Parameter | Beschrijving | Standaardwaarde |
 |-----------|--------------|-----------------|
-| `search` | Veld waarop gezocht moet worden (bijv. 'service_id') | - |
-| `<search>` | De waarde waarop gefilterd moet worden wanneer 'search' is ingesteld | - |
+| `search` | Veld waarop gezocht moet worden (bijv. 'service_id', 'start_date', 'end_date') | - |
+| `service_id` | Filter op service ID | - |
+| `start_date` | Filter op startdatum | - |
+| `end_date` | Filter op einddatum | - |
+| `monday` | Filter op maandagservice (0 of 1) | - |
+| `tuesday` | Filter op dinsdagservice (0 of 1) | - |
+| `wednesday` | Filter op woensdagservice (0 of 1) | - |
+| `thursday` | Filter op donderdagservice (0 of 1) | - |
+| `friday` | Filter op vrijdagservice (0 of 1) | - |
+| `saturday` | Filter op zaterdagservice (0 of 1) | - |
+| `sunday` | Filter op zondagservice (0 of 1) | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
 | `limit` | Aantal records per pagina | 1000 (max: 5000) |
 | `page` | Paginanummer beginnend vanaf 0 | 0 |
-
-**Voorbeeld:**
-```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/calendar?search=monday&monday=1
-```
-
-**Response:** De calendar.txt gegevens als JSON
 
 ### GET `/api/planningdata/trips`
 
 Haal de trips.txt gegevens op met rit-informatie.
 
-**Response:** De trips.txt gegevens als JSON
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'route_id', 'service_id', 'trip_id', 'trip_headsign') | - |
+| `route_id` | Filter op route ID | - |
+| `service_id` | Filter op service ID | - |
+| `trip_id` | Filter op trip ID | - |
+| `trip_headsign` | Filter op ritbestemming | - |
+| `trip_short_name` | Filter op korte ritnaam | - |
+| `direction_id` | Filter op richting ID | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
 
 ### GET `/api/planningdata/stop_times`
 
@@ -289,74 +327,90 @@ Haal de stop_times.txt gegevens op met haltetijdinformatie.
 **Parameters:**
 | Parameter | Beschrijving | Standaardwaarde |
 |-----------|--------------|-----------------|
-| `page` | Paginanummer beginnend vanaf 0 | 0 |
+| `search` | Veld waarop gezocht moet worden (bijv. 'trip_id', 'stop_id', 'arrival_time', 'departure_time') | - |
+| `trip_id` | Filter op trip ID | - |
+| `stop_id` | Filter op stop ID | - |
+| `arrival_time` | Filter op aankomsttijd (formaat: HH:MM:SS) | - |
+| `departure_time` | Filter op vertrektijd (formaat: HH:MM:SS) | - |
+| `stop_sequence` | Filter op stopvolgorde | - |
+| `stop_headsign` | Filter op stopbestemming | - |
+| `pickup_type` | Filter op ophaaltype | - |
+| `drop_off_type` | Filter op afzettype | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
 | `limit` | Aantal records per pagina | 1000 (max: 5000) |
-| `search` | Zoektekst om haltetijden te filteren | - |
-| `field` | Specifiek veld om in te zoeken (bijv. 'stop_id') | - |
-| `sort_by` | Veld om op te sorteren (bijv. 'arrival_time') | - |
-| `sort_direction` | Sorteerrichting (asc of desc) | - |
-| `stop_id` | Filter op specifieke stop_id | - |
-| `trip_id` | Filter op specifieke trip_id | - |
-| `arrival_time` | Filter op specifieke aankomsttijd (formaat: HH:MM:SS) | - |
-| `departure_time` | Filter op specifieke vertrektijd (formaat: HH:MM:SS) | - |
-
-**Response:** De stop_times.txt gegevens als JSON met paginering metadata
-
-**Voorbeeld:**
-```json
-{
-  "data": [
-    {
-      "trip_id": "88____",
-      "arrival_time": "05:24:00",
-      "departure_time": "05:24:00",
-      "stop_id": "8861606",
-      "stop_sequence": "0",
-      "pickup_type": "0",
-      "drop_off_type": "0"
-    },
-    ...
-  ],
-  "pagination": {
-    "page": 0,
-    "pageSize": 1000,
-    "totalRecords": 125000,
-    "totalPages": 125,
-    "hasNextPage": true,
-    "hasPrevPage": false
-  }
-}
-```
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
 
 ### GET `/api/planningdata/calendar_dates`
 
 Haal de calendar_dates.txt gegevens op met uitzonderingsdatums.
 
-**Response:** De calendar_dates.txt gegevens als JSON
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'service_id', 'date', 'exception_type') | - |
+| `service_id` | Filter op service ID | - |
+| `date` | Filter op datum | - |
+| `exception_type` | Filter op uitzonderingstype | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
+
+**Voorbeeld:**
+```
+/api/planningdata/calendar_dates?search=date&date=20250408
+```
+
+**Response:** De calendar_dates.txt gegevens als JSON, gefilterd op zoekparameters
 
 ### GET `/api/planningdata/agency`
 
 Haal de agency.txt gegevens op met vervoerdersinformatie.
 
-**Response:** De agency.txt gegevens als JSON
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'agency_id', 'agency_name') | - |
+| `agency_id` | Filter op agency ID | - |
+| `agency_name` | Filter op agency naam | - |
+| `agency_url` | Filter op agency URL | - |
+| `agency_timezone` | Filter op agency tijdzone | - |
+| `agency_lang` | Filter op agency taal | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
+
+**Voorbeeld:**
+```
+/api/planningdata/agency?search=agency_name&agency_name=NMBS
+```
+
+**Response:** De agency.txt gegevens als JSON, gefilterd op zoekparameters
 
 ### GET `/api/planningdata/translations`
 
 Haal de translations.txt gegevens op met vertaalinformatie.
 
-**Response:** De translations.txt gegevens als JSON
+**Parameters:**
+| Parameter | Beschrijving | Standaardwaarde |
+|-----------|--------------|-----------------|
+| `search` | Veld waarop gezocht moet worden (bijv. 'table_name', 'field_name', 'language', 'translation') | - |
+| `table_name` | Filter op tabelnaam | - |
+| `field_name` | Filter op veldnaam | - |
+| `language` | Filter op taalcode | - |
+| `translation` | Filter op vertaaltekst | - |
+| `record_id` | Filter op record ID | - |
+| `field_value` | Filter op veldwaarde | - |
+| `exact` | Of er exact (true) of gedeeltelijk (false) moet worden gezocht | false |
+| `limit` | Aantal records per pagina | 1000 (max: 5000) |
+| `page` | Paginanummer beginnend vanaf 0 | 0 |
 
-### POST `/api/update`
-
-Forceer een onmiddellijke update van alle gegevens.
-
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "Data updated successfully"
-}
+**Voorbeelden:**
 ```
+/api/planningdata/translations?search=language&language=nl
+/api/planningdata/translations?search=translation&translation=Brussel
+```
+
+**Response:** De translations.txt gegevens als JSON, gefilterd op zoekparameters
 
 ## 📊 Gegevensstructuur
 
@@ -579,7 +633,22 @@ A simple health check endpoint that returns the status of the API.
 
 Retrieve the latest real-time train data with track changes.
 
-**Response:** The GTFS real-time data as JSON
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'id', 'stopId', 'timestamp') | - |
+| `<search>` | The value to filter by when 'search' is set | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
+| `limit` | Maximum number of results to return | 1000 |
+
+**Examples:**
+```
+/api/realtime/data?search=id&id=88____:007::8831310:8884335:48:1050:20251212
+/api/realtime/data?search=stopId&stopId=8831310_2
+/api/realtime/data?search=timestamp&timestamp=1744361475
+```
+
+**Response:** The GTFS real-time data as JSON, filtered by search parameters
 
 ### GET `/api/planningdata/<filename>`
 
@@ -589,13 +658,17 @@ Retrieve the content of a specific planning data file.
 - `filename`: The name of the file to retrieve (with or without extension)
 - `search`: Field to search in (e.g., 'stop_name', 'route_id', etc.)
 - `<search>`: The value to filter by when 'search' is set
+- `exact`: Whether to perform exact matching (true) or partial matching (false)
+- `limit`: Maximum number of results to return (default: 1000, max: 5000)
 
-**Example:**
+**Examples:**
 ```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussels
+/api/planningdata/stops?search=stop_name&stop_name=Brussels&exact=false
+/api/planningdata/routes?search=route_short_name&route_short_name=IC&exact=true
+/api/planningdata/calendar?search=service_id&service_id=1
 ```
 
-**Response:** The file content as JSON
+**Response:** The file content as JSON, filtered by search parameters
 
 ### GET `/api/planningdata/stops`
 
@@ -604,18 +677,24 @@ Retrieve the stops.txt data with station information.
 **Parameters:**
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
-| `search` | Field to search in (e.g., 'stop_name') | - |
+| `search` | Field to search in (e.g., 'stop_name', 'stop_id', 'stop_lat', 'stop_lon') | - |
 | `stop_name` | Filter by station name | - |
 | `stop_id` | Filter by station ID | - |
+| `stop_lat` | Filter by latitude | - |
+| `stop_lon` | Filter by longitude | - |
+| `zone_id` | Filter by zone ID | - |
+| `parent_station` | Filter by parent station | - |
+| `platform_code` | Filter by platform code | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
 | `limit` | Number of records per page | 1000 (max: 5000) |
 | `page` | Page number starting from 0 | 0 |
 
-**Example:**
+**Examples:**
 ```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/stops?search=stop_name&stop_name=Brussels
+/api/planningdata/stops?search=stop_name&stop_name=Brussels
+/api/planningdata/stops?search=stop_id&stop_id=8831310
+/api/planningdata/stops?search=stop_lat&stop_lat=50.85&exact=false
 ```
-
-**Response:** The stops.txt data as JSON
 
 ### GET `/api/planningdata/routes`
 
@@ -624,17 +703,15 @@ Retrieve the routes.txt data with route information.
 **Parameters:**
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
-| `search` | Field to search in (e.g., 'route_id', 'route_short_name') | - |
-| `<search>` | The value to filter by when 'search' is set | - |
+| `search` | Field to search in (e.g., 'route_id', 'route_short_name', 'route_long_name') | - |
+| `route_id` | Filter by route ID | - |
+| `route_short_name` | Filter by short name | - |
+| `route_long_name` | Filter by long name | - |
+| `route_type` | Filter by route type | - |
+| `agency_id` | Filter by agency ID | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
 | `limit` | Number of records per page | 1000 (max: 5000) |
 | `page` | Page number starting from 0 | 0 |
-
-**Example:**
-```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/routes?search=route_short_name&route_short_name=IC
-```
-
-**Response:** The routes.txt data as JSON
 
 ### GET `/api/planningdata/calendar`
 
@@ -643,23 +720,38 @@ Retrieve the calendar.txt data with service schedule calendar information.
 **Parameters:**
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
-| `search` | Field to search in (e.g., 'service_id') | - |
-| `<search>` | The value to filter by when 'search' is set | - |
+| `search` | Field to search in (e.g., 'service_id', 'start_date', 'end_date') | - |
+| `service_id` | Filter by service ID | - |
+| `start_date` | Filter by start date | - |
+| `end_date` | Filter by end date | - |
+| `monday` | Filter by Monday service (0 or 1) | - |
+| `tuesday` | Filter by Tuesday service (0 or 1) | - |
+| `wednesday` | Filter by Wednesday service (0 or 1) | - |
+| `thursday` | Filter by Thursday service (0 or 1) | - |
+| `friday` | Filter by Friday service (0 or 1) | - |
+| `saturday` | Filter by Saturday service (0 or 1) | - |
+| `sunday` | Filter by Sunday service (0 or 1) | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
 | `limit` | Number of records per page | 1000 (max: 5000) |
 | `page` | Page number starting from 0 | 0 |
-
-**Example:**
-```
-https://nmbsapi.sanderzijntestjes.be/api/planningdata/calendar?search=monday&monday=1
-```
-
-**Response:** The calendar.txt data as JSON
 
 ### GET `/api/planningdata/trips`
 
 Retrieve the trips.txt data with trip information.
 
-**Response:** The trips.txt data as JSON
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'route_id', 'service_id', 'trip_id', 'trip_headsign') | - |
+| `route_id` | Filter by route ID | - |
+| `service_id` | Filter by service ID | - |
+| `trip_id` | Filter by trip ID | - |
+| `trip_headsign` | Filter by trip headsign | - |
+| `trip_short_name` | Filter by trip short name | - |
+| `direction_id` | Filter by direction ID | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
 
 ### GET `/api/planningdata/stop_times`
 
@@ -668,74 +760,90 @@ Retrieve the stop_times.txt data with stop time information.
 **Parameters:**
 | Parameter | Description | Default Value |
 |-----------|-------------|---------------|
-| `page` | Page number starting from 0 | 0 |
+| `search` | Field to search in (e.g., 'trip_id', 'stop_id', 'arrival_time', 'departure_time') | - |
+| `trip_id` | Filter by trip ID | - |
+| `stop_id` | Filter by stop ID | - |
+| `arrival_time` | Filter by arrival time (format: HH:MM:SS) | - |
+| `departure_time` | Filter by departure time (format: HH:MM:SS) | - |
+| `stop_sequence` | Filter by stop sequence | - |
+| `stop_headsign` | Filter by stop headsign | - |
+| `pickup_type` | Filter by pickup type | - |
+| `drop_off_type` | Filter by drop-off type | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
 | `limit` | Number of records per page | 1000 (max: 5000) |
-| `search` | Search text to filter stop times | - |
-| `field` | Specific field to search in (e.g., 'stop_id') | - |
-| `sort_by` | Field to sort by (e.g., 'arrival_time') | - |
-| `sort_direction` | Sort direction (asc or desc) | - |
-| `stop_id` | Filter by specific stop_id | - |
-| `trip_id` | Filter by specific trip_id | - |
-| `arrival_time` | Filter by specific arrival time (format: HH:MM:SS) | - |
-| `departure_time` | Filter by specific departure time (format: HH:MM:SS) | - |
-
-**Response:** The stop_times.txt data as JSON with pagination metadata
-
-**Example:**
-```json
-{
-  "data": [
-    {
-      "trip_id": "88____",
-      "arrival_time": "05:24:00",
-      "departure_time": "05:24:00",
-      "stop_id": "8861606",
-      "stop_sequence": "0",
-      "pickup_type": "0",
-      "drop_off_type": "0"
-    },
-    ...
-  ],
-  "pagination": {
-    "page": 0,
-    "pageSize": 1000,
-    "totalRecords": 125000,
-    "totalPages": 125,
-    "hasNextPage": true,
-    "hasPrevPage": false
-  }
-}
-```
+| `page` | Page number starting from 0 | 0 |
 
 ### GET `/api/planningdata/calendar_dates`
 
 Retrieve the calendar_dates.txt data with exception dates.
 
-**Response:** The calendar_dates.txt data as JSON
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'service_id', 'date', 'exception_type') | - |
+| `service_id` | Filter by service ID | - |
+| `date` | Filter by date | - |
+| `exception_type` | Filter by exception type | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
+
+**Example:**
+```
+/api/planningdata/calendar_dates?search=date&date=20250408
+```
+
+**Response:** The calendar_dates.txt data as JSON, filtered by search parameters
 
 ### GET `/api/planningdata/agency`
 
 Retrieve the agency.txt data with carrier information.
 
-**Response:** The agency.txt data as JSON
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'agency_id', 'agency_name') | - |
+| `agency_id` | Filter by agency ID | - |
+| `agency_name` | Filter by agency name | - |
+| `agency_url` | Filter by agency URL | - |
+| `agency_timezone` | Filter by agency timezone | - |
+| `agency_lang` | Filter by agency language | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
+
+**Example:**
+```
+/api/planningdata/agency?search=agency_name&agency_name=NMBS
+```
+
+**Response:** The agency.txt data as JSON, filtered by search parameters
 
 ### GET `/api/planningdata/translations`
 
 Retrieve the translations.txt data with translation information.
 
-**Response:** The translations.txt data as JSON
+**Parameters:**
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `search` | Field to search in (e.g., 'table_name', 'field_name', 'language', 'translation') | - |
+| `table_name` | Filter by table name | - |
+| `field_name` | Filter by field name | - |
+| `language` | Filter by language code | - |
+| `translation` | Filter by translation text | - |
+| `record_id` | Filter by record ID | - |
+| `field_value` | Filter by field value | - |
+| `exact` | Whether to perform exact matching (true) or partial matching (false) | false |
+| `limit` | Number of records per page | 1000 (max: 5000) |
+| `page` | Page number starting from 0 | 0 |
 
-### POST `/api/update`
-
-Force an immediate update of all data.
-
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "Data updated successfully"
-}
+**Examples:**
 ```
+/api/planningdata/translations?search=language&language=nl
+/api/planningdata/translations?search=translation&translation=Brussel
+```
+
+**Response:** The translations.txt data as JSON, filtered by search parameters
 
 ## 📊 Data Structure
 
