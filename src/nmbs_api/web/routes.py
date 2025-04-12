@@ -37,30 +37,48 @@ def add_metadata_to_response(data, endpoint_name=None, file_type=None):
     Returns:
         dict: Response with metadata
     """
-    # Get the current time in ISO format
-    current_time = datetime.datetime.utcnow().isoformat()
-    
     # Prepare metadata
     metadata = {
         "api_name": API_NAME,
         "version": API_VERSION,
-        "generated_at": current_time,
         "endpoint": endpoint_name or request.path,
         "data_type": file_type
     }
     
-    # Add last data update time if available
-    last_updated_file = os.path.join('data', 'last_updated.json')
-    if os.path.exists(last_updated_file):
+    # Add last data update time and use it for generated_at
+    last_update_time = None
+    realtime_last_updated_file = os.path.join('data', 'Real-time_gegevens', 'last_updated.json')
+    planning_last_updated_file = os.path.join('data', 'Planning_gegevens', 'planning_updated.json')
+    
+    # Try to get the timestamp for when the data was last downloaded
+    if os.path.exists(realtime_last_updated_file):
         try:
-            with open(last_updated_file, 'r') as f:
+            with open(realtime_last_updated_file, 'r') as f:
                 update_info = json.load(f)
-                # Use the '_last_updated' timestamp if available
-                if '_last_updated' in update_info:
-                    metadata["last_data_update"] = update_info['_last_updated']
-        except Exception:
-            # If there's an error reading the file, just continue without this info
-            pass
+                # Get the last_downloaded timestamp from the first entry
+                for key in update_info:
+                    if 'last_downloaded' in update_info[key]:
+                        last_update_time = update_info[key]['last_downloaded']
+                        break
+        except Exception as e:
+            logger.error(f"Error reading realtime last_updated.json: {str(e)}")
+    
+    # If no realtime timestamp, try planning data
+    if not last_update_time and os.path.exists(planning_last_updated_file):
+        try:
+            with open(planning_last_updated_file, 'r') as f:
+                update_info = json.load(f)
+                if 'last_downloaded' in update_info:
+                    last_update_time = update_info['last_downloaded']
+        except Exception as e:
+            logger.error(f"Error reading planning_updated.json: {str(e)}")
+    
+    # Set the generated_at field to the last download time, or current time if not available
+    if last_update_time:
+        metadata["generated_at"] = last_update_time
+    else:
+        # Fallback to current time if no download timestamp is available
+        metadata["generated_at"] = datetime.datetime.utcnow().isoformat()
     
     # Count records in the response
     if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
