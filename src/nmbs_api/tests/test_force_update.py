@@ -9,8 +9,9 @@ def test_force_update():
     test_name = "Force Update Test"
     log_test(test_name, TestStatus.RUNNING, "Testing force update functionality")
     
-    # Make request to update endpoint
-    status_code, response_data = make_api_request("api/update", method="POST")
+    # Make request to update endpoint - gebruik een langere timeout (30 sec)
+    # omdat data verwerking meer dan 10 seconden kan duren
+    status_code, response_data = make_api_request("api/update", method="POST", timeout=30)
     
     # Check if request was successful
     if status_code == 200:

@@ -19,3 +19,5 @@ tqdm>=4.64.0       # Progress bars for processing
 redis>=4.3.4       # Optional: For advanced caching
 marshmallow>=3.17.0 # For data serialization/validation
 rapidfuzz>=2.13.7  # Fuzzy string matching for search
+jsonschema>=4.17.3  # Voor JSON schema validatie
+prometheus-client>=0.17.1  # Voor monitoring metrics

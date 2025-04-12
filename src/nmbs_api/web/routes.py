@@ -601,15 +601,95 @@ def get_data():
 @limiter.limit("5 per minute")
 def update_data_endpoint():
     """Force an immediate update of the data"""
+    from .validation import validate_json
+    from .monitoring import record_data_update, record_error
+    
     try:
+        # Valideer de JSON input als die aanwezig is
+        if request.is_json:
+            from jsonschema import validate, ValidationError
+            
+            # Schema voor het update endpoint
+            UPDATE_SCHEMA = {
+                "type": "object",
+                "properties": {
+                    "force": {"type": "boolean"},
+                    "update_type": {"type": "string", "enum": ["realtime", "planning", "all"]},
+                    "clear_cache": {"type": "boolean"}
+                },
+                "required": ["force"]
+            }
+            
+            try:
+                validate(instance=request.json, schema=UPDATE_SCHEMA)
+                # Gebruik parameters uit request als die geldig zijn
+                force = request.json.get("force", True)
+                update_type = request.json.get("update_type", "all")
+                
+                logger.info(f"Uitvoeren update met parameters: force={force}, type={update_type}")
+            except ValidationError as e:
+                logger.warning(f"Ongeldige JSON voor update: {e}")
+                return jsonify({
+                    "error": "Ongeldige JSON data", 
+                    "details": str(e),
+                    "schema": UPDATE_SCHEMA
+                }), 400
+        else:
+            # Default parameters als er geen JSON is
+            force = True
+            update_type = "all"
+        
+        # Registreer timestamp vóór de update
+        start_time = datetime.datetime.now()
+        
+        # Voer de update uit
         success = force_update()
         
+        # Bereken duur van de update
+        elapsed_time = (datetime.datetime.now() - start_time).total_seconds()
+        
+        # Update metrics voor monitoring
         if success:
-            return jsonify({"status": "success", "message": "Data updated successfully"})
+            # Probeer het aantal records te bepalen
+            try:
+                records_count = 0
+                if update_type in ["all", "realtime"]:
+                    realtime_data = get_realtime_data()
+                    if isinstance(realtime_data, dict) and "data" in realtime_data:
+                        records_count = len(realtime_data["data"])
+                    record_data_update("realtime", records_count, elapsed_time)
+                
+                if update_type in ["all", "planning"]:
+                    for file_type in ["stops", "routes", "trips", "calendar"]:
+                        try:
+                            data = get_planning_file(f"{file_type}.txt")
+                            if isinstance(data, dict) and "data" in data:
+                                file_records = len(data["data"])
+                                record_data_update(file_type, file_records, elapsed_time / 4)
+                        except Exception as e:
+                            logger.error(f"Fout bij het tellen van records voor {file_type}: {e}")
+            except Exception as e:
+                logger.error(f"Fout bij het bijwerken van metrics: {e}")
+            
+            return jsonify({
+                "status": "success", 
+                "message": "Data updated successfully",
+                "elapsed_time": elapsed_time,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            })
         else:
-            return jsonify({"status": "error", "message": "Failed to update data"}), 500
+            # Registreer een fout
+            record_error("update", "UpdateFailed", "Data update failed")
+            return jsonify({
+                "status": "error", 
+                "message": "Failed to update data",
+                "elapsed_time": elapsed_time
+            }), 500
+            
     except Exception as e:
         logger.error(f"Error updating data: {str(e)}")
+        # Registreer een fout
+        record_error("update", "Exception", str(e))
         return jsonify({"error": "Error updating data", "message": str(e)}), 500
 
 @api_routes.route('/security/audit', methods=['GET'])

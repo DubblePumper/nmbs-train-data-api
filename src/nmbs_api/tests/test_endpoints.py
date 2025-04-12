@@ -151,9 +151,37 @@ def test_realtime_data():
 @timed_test
 def test_planning_stops():
     """Test the planning stops endpoint"""
+    import os
+    import time
+    
     test_name = "Planning Stops Endpoint"
     log_test(test_name, TestStatus.RUNNING, "Testing planning stops endpoint")
     
+    # Check if planning data is already extracted
+    planning_dir = os.path.join('data', 'Planning_gegevens', 'extracted')
+    stops_file = os.path.join(planning_dir, 'stops.txt')
+    
+    # Wacht maximaal 20 seconden totdat stops.txt beschikbaar is
+    wait_time = 0
+    while not os.path.exists(stops_file) and wait_time < 20:
+        log_test(test_name, TestStatus.INFO, f"Wachten op stops.txt bestand ({wait_time}s)...")
+        
+        # Als we nog wachten op bestanden, laten we force_update aanroepen om ervoor te zorgen
+        # dat de data wordt gedownload en uitgepakt
+        if wait_time == 0 or wait_time > 10:
+            _, _ = make_api_request("api/update", method="POST", timeout=30)
+            log_test(test_name, TestStatus.INFO, "Force update uitgevoerd om bestanden te downloaden")
+        
+        time.sleep(2)
+        wait_time += 2
+    
+    # Controleer of stops.txt bestaat na het wachten
+    if not os.path.exists(stops_file):
+        log_test(test_name, TestStatus.FAILED, f"Bestand stops.txt niet gevonden na {wait_time}s wachten")
+    else:
+        log_test(test_name, TestStatus.INFO, f"Bestand stops.txt gevonden na {wait_time}s wachten")
+    
+    # Voer de test uit
     endpoint = "api/planningdata/stops"
     status_code, response_data = make_api_request(endpoint)
     

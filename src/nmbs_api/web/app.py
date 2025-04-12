@@ -5,11 +5,13 @@ import os
 import logging
 import ssl
 from flask import Flask, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 from .middleware import setup_middleware
 from .routes import api_routes
 from .cache import CacheManager
 from .security import setup_security, run_security_audit
+from .monitoring import setup_request_monitoring, register_metrics_endpoint
 from ..api import start_data_service
 
 # Configure logging
@@ -30,6 +32,16 @@ def create_app():
     """
     # Create Flask app
     app = Flask(__name__)
+    
+    # Set up CORS - Toegang voor alle oorsprong toestaan
+    CORS(app, resources={
+        r"/*": {
+            "origins": "*",  # Voor open API toegang
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+        }
+    })
+    logger.info("CORS configuratie toegepast: open toegang voor alle oorsprong")
     
     # Configure JSON pretty printing in a compatible way
     app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
@@ -58,6 +70,11 @@ def create_app():
     
     # Register the API routes blueprint with a prefix
     app.register_blueprint(api_routes, url_prefix='/api')
+    
+    # Set up monitoring and metrics
+    setup_request_monitoring(app)
+    register_metrics_endpoint(app)
+    logger.info("Monitoring systeem en /metrics endpoint ingeschakeld")
     
     # Start the data service in the background
     logger.info("Starting NMBS data service...")
