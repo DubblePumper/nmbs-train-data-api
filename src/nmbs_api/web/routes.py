@@ -21,6 +21,76 @@ from ..tests.test_api import test_api
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# API version and name information
+API_NAME = "NMBS Train Data API"
+API_VERSION = "1.0.0"  # You may want to extract this from a version file
+
+def add_metadata_to_response(data, endpoint_name=None, file_type=None):
+    """
+    Add metadata to API responses
+    
+    Args:
+        data: The response data
+        endpoint_name: Name of the endpoint (optional)
+        file_type: Type of data (e.g., 'stops', 'routes', 'realtime')
+        
+    Returns:
+        dict: Response with metadata
+    """
+    # Get the current time in ISO format
+    current_time = datetime.datetime.utcnow().isoformat()
+    
+    # Prepare metadata
+    metadata = {
+        "api_name": API_NAME,
+        "version": API_VERSION,
+        "generated_at": current_time,
+        "endpoint": endpoint_name or request.path,
+        "data_type": file_type
+    }
+    
+    # Add last data update time if available
+    last_updated_file = os.path.join('data', 'last_updated.json')
+    if os.path.exists(last_updated_file):
+        try:
+            with open(last_updated_file, 'r') as f:
+                update_info = json.load(f)
+                # Use the '_last_updated' timestamp if available
+                if '_last_updated' in update_info:
+                    metadata["last_data_update"] = update_info['_last_updated']
+        except Exception:
+            # If there's an error reading the file, just continue without this info
+            pass
+    
+    # Count records in the response
+    if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+        metadata["record_count"] = len(data["data"])
+        if "pagination" in data:
+            metadata["total_records"] = data["pagination"].get("totalRecords", len(data["data"]))
+            metadata["page"] = data["pagination"].get("page", 0)
+            metadata["page_size"] = data["pagination"].get("pageSize", len(data["data"]))
+            metadata["total_pages"] = data["pagination"].get("totalPages", 1)
+    elif isinstance(data, list):
+        metadata["record_count"] = len(data)
+        # Wrap list data in a data object for consistency
+        return {"metadata": metadata, "data": data}
+    
+    # If data is already a dict but doesn't have a 'data' key, add metadata without modifying structure
+    if isinstance(data, dict):
+        if "data" not in data:
+            # Don't modify error responses
+            if "error" in data:
+                return data
+            else:
+                # For other responses, keep the existing structure and add metadata
+                return {"metadata": metadata, **data}
+        else:
+            # Already has a 'data' key, add metadata
+            return {"metadata": metadata, **data}
+    else:
+        # For other types, wrap in a data object
+        return {"metadata": metadata, "data": data}
+
 # Create API blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -66,7 +136,9 @@ def get_realtime_data_endpoint():
         data = get_realtime_data()
         
         if data:
-            return jsonify(data)
+            # Add metadata to the response
+            response_data = add_metadata_to_response(data, endpoint_name='/api/realtime/data', file_type='realtime')
+            return jsonify(response_data)
         else:
             return jsonify({"error": "No realtime data available"}), 404
     except Exception as e:
@@ -184,7 +256,15 @@ def get_specific_planning_file(filename):
         )
         
         if data:
-            return jsonify(data)
+            # Strip extension for data_type
+            file_type = filename.split('.')[0] if '.' in filename else filename
+            # Add metadata to the response
+            response_data = add_metadata_to_response(
+                data, 
+                endpoint_name=f'/api/planningdata/{file_type}', 
+                file_type=file_type
+            )
+            return jsonify(response_data)
         else:
             return jsonify({"error": f"Could not parse planning file '{filename}'"}), 404
     except Exception as e:
@@ -224,7 +304,9 @@ def get_stops_data():
         )
         
         if data:
-            return jsonify(data)
+            # Add metadata to the response
+            response_data = add_metadata_to_response(data, endpoint_name='/api/planningdata/stops', file_type='stops')
+            return jsonify(response_data)
         else:
             return jsonify({"error": "No stops data available"}), 404
     except Exception as e:
@@ -262,7 +344,9 @@ def get_routes_data():
         )
         
         if data:
-            return jsonify(data)
+            # Add metadata to the response
+            response_data = add_metadata_to_response(data, endpoint_name='/api/planningdata/routes', file_type='routes')
+            return jsonify(response_data)
         else:
             return jsonify({"error": "No routes data available"}), 404
     except Exception as e:
@@ -299,7 +383,9 @@ def get_calendar_data():
         )
         
         if data:
-            return jsonify(data)
+            # Add metadata to the response
+            response_data = add_metadata_to_response(data, endpoint_name='/api/planningdata/calendar', file_type='calendar')
+            return jsonify(response_data)
         else:
             return jsonify({"error": "No calendar data available"}), 404
     except Exception as e:
@@ -336,7 +422,9 @@ def get_trips_data():
         )
         
         if data:
-            return jsonify(data)
+            # Add metadata to the response
+            response_data = add_metadata_to_response(data, endpoint_name='/api/planningdata/trips', file_type='trips')
+            return jsonify(response_data)
         else:
             return jsonify({"error": "No trips data available"}), 404
     except Exception as e:
@@ -378,7 +466,9 @@ def get_stop_times_data():
         )
         
         if data:
-            return jsonify(data)
+            # Add metadata to the response
+            response_data = add_metadata_to_response(data, endpoint_name='/api/planningdata/stop_times', file_type='stop_times')
+            return jsonify(response_data)
         else:
             return jsonify({"error": "No stop times data available"}), 404
     except Exception as e:
