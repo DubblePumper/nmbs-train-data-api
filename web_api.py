@@ -22,6 +22,10 @@ from nmbs_api import (
     force_update
 )
 
+# Import the trajectories endpoint functionality
+# Update the import statement to use the correct path
+from src.nmbs_api.web.trajectories_endpoint import get_trajectories
+
 # Load environment variables
 load_dotenv()
 
@@ -199,6 +203,27 @@ def update_data():
             }), 500
     except Exception as e:
         logger.error(f"Error in update_data: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/trajectories')
+@limiter.limit("60 per minute")
+def trajectories_data():
+    """Endpoint to get trajectories data (combined train routes with stops and status)"""
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 0))
+        page_size = min(int(request.args.get('limit', 20)), 100)  # Limit page size to avoid overload
+        
+        # Get trajectories data directly from cache files (faster than using other API endpoints)
+        response = get_trajectories(page=page, page_size=page_size)
+        
+        # If response is a tuple, it contains an error
+        if isinstance(response, tuple):
+            return jsonify(response[0]), response[1]
+            
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Error in trajectories_data endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 # Initialize cache on startup

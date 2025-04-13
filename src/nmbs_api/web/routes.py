@@ -17,6 +17,7 @@ from ..api import (
 )
 from .cache import CacheManager
 from ..tests.test_api import test_api
+from .trajectories_endpoint import get_trajectories
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -727,4 +728,43 @@ def security_audit_endpoint():
             "error": "Error running security audit",
             "message": str(e),
             "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 500
+
+# Add the trajectories endpoint
+@api_routes.route('/trajectories', methods=['GET'])
+@limiter.limit("60 per minute")
+def get_trajectories_data():
+    """
+    Get combined train trajectories data with stops, route, and status information
+    
+    This endpoint provides complete trajectory information by combining real-time 
+    data with static planning data. It accesses data files directly for improved
+    performance rather than using other API endpoints.
+    
+    Query Parameters:
+        page (int): Page number starting from 0 (default: 0)
+        limit (int): Number of records per page (default: 20, max: 100)
+    """
+    try:
+        # Extract pagination parameters
+        page = int(request.args.get('page', 0))
+        page_size = min(int(request.args.get('limit', 20)), 100)  # Limit page size to avoid overload
+        
+        logger.info(f"Trajectories request - page: {page}, limit: {page_size}")
+        
+        # Get trajectories data directly from cache files (faster than using other API endpoints)
+        response = get_trajectories(page=page, page_size=page_size)
+        
+        # If response is a tuple, it contains an error
+        if isinstance(response, tuple):
+            logger.error(f"Error generating trajectories: {response[0]}")
+            return jsonify(response[0]), response[1]
+            
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Error in trajectories endpoint: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "error": "Error generating trajectories data", 
+            "message": str(e)
         }), 500
