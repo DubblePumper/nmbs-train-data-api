@@ -93,6 +93,19 @@ def add_metadata_to_response(data, endpoint_name=None, file_type=None):
         # Wrap list data in a data object for consistency
         return {"metadata": metadata, "data": data}
     
+    # For realtime data, add total_records count to metadata
+    if file_type == 'realtime':
+        # For realtime data, count the total number of records from the entity list if available
+        if isinstance(data, dict) and "entity" in data:
+            metadata["total_records"] = len(data["entity"])
+        elif isinstance(data, dict) and "header" in data and "entity" in data:
+            # If data is in GTFS format with header and entity
+            metadata["total_records"] = len(data["entity"])
+        # If data is already paginated or processed, use the existing count
+        elif isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+            if "total_records" not in metadata:
+                metadata["total_records"] = len(data["data"])
+    
     # If data is already a dict but doesn't have a 'data' key, add metadata without modifying structure
     if isinstance(data, dict):
         if "data" not in data:
