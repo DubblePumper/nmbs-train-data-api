@@ -93,6 +93,10 @@ class ColoredFormatter(logging.Formatter):
 class RateLimitingFilter(logging.Filter):
     """Filter to prevent log spam by combining repeated messages"""
     
+    def __init__(self):
+        super().__init__()
+        self.pending_summaries = []  # Store pending summary messages
+
     def filter(self, record):
         global _last_log, _RATE_LIMIT_SECONDS, _RATE_LIMIT_THRESHOLD
         
@@ -115,28 +119,15 @@ class RateLimitingFilter(logging.Filter):
                     # Suppress intermediate repeated logs
                     return False
             else:
-                # If we had previous repeated messages, show a summary
+                # If we had previous repeated messages, store summary info for later emission
                 if _last_log['count'] > _RATE_LIMIT_THRESHOLD:
-                    # Store the current record details to restore after logging the summary
-                    orig_msg = record.msg
-                    orig_args = record.args
-                    orig_levelno = record.levelno
-                    orig_levelname = record.levelname
-                    
-                    # Modify the record to show the summary of previous messages
-                    record.msg = f"Previous message repeated {_last_log['count']} times"
-                    record.args = ()
-                    record.levelno = _last_log['level']
-                    record.levelname = logging.getLevelName(_last_log['level'])
-                    
-                    # Let the summary message through
-                    logging.getLogger(record.name).handle(record)
-                    
-                    # Restore the current record
-                    record.msg = orig_msg
-                    record.args = orig_args
-                    record.levelno = orig_levelno
-                    record.levelname = orig_levelname
+                    # Create a new summary record instead of modifying the current one
+                    self.pending_summaries.append({
+                        'name': record.name,
+                        'msg': f"Previous message repeated {_last_log['count']} times",
+                        'level': _last_log['level'],
+                        'levelname': logging.getLevelName(_last_log['level'])
+                    })
                 
                 # Reset for the new message
                 _last_log['message'] = message
@@ -145,6 +136,19 @@ class RateLimitingFilter(logging.Filter):
                 _last_log['level'] = record.levelno
             
             return True
+            
+    def emit_pending_summaries(self):
+        """Emit any pending summary messages using a separate method"""
+        summaries = self.pending_summaries.copy()
+        self.pending_summaries = []
+        
+        for summary in summaries:
+            logger = logging.getLogger(summary['name'])
+            level = summary['level']
+            msg = summary['msg']
+            
+            # Use log method directly instead of handle() to avoid recursion
+            logger.log(level, msg)
 
 class LogGroup:
     """Context manager for grouping related log messages visually"""
@@ -212,13 +216,9 @@ def setup_logging(console_level=logging.INFO, log_file=None, log_file_level=logg
     colored_formatter = ColoredFormatter(use_colors=use_colors)
     file_formatter = ColoredFormatter(use_colors=False)
     
-    # Create and configure the rate limiting filter
-    rate_limiting_filter = RateLimitingFilter()
-    
     # Set up console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(colored_formatter)
-    console_handler.addFilter(rate_limiting_filter)
     console_handler.setLevel(console_level)
     
     # Configure root logger with the lowest level of either console or file
@@ -226,6 +226,27 @@ def setup_logging(console_level=logging.INFO, log_file=None, log_file_level=logg
     min_level = min(console_level, log_file_level) if log_file else console_level
     root_logger.setLevel(min_level)
     root_logger.addHandler(console_handler)
+    
+    # Create and configure the rate limiting filter
+    rate_limiting_filter = RateLimitingFilter()
+    
+    # Custom handler class that will emit pending summaries after handling each record
+    class SummaryAwareHandler(logging.Handler):
+        def __init__(self, base_handler, rate_filter):
+            super().__init__()
+            self.base_handler = base_handler
+            self.rate_filter = rate_filter
+            
+        def emit(self, record):
+            self.base_handler.emit(record)
+            # After each emission, check if there are summaries to emit
+            self.rate_filter.emit_pending_summaries()
+            
+    # Wrap the console handler
+    summary_console_handler = SummaryAwareHandler(console_handler, rate_limiting_filter)
+    summary_console_handler.addFilter(rate_limiting_filter)
+    root_logger.addHandler(summary_console_handler)
+    root_logger.removeHandler(console_handler)  # Remove the original handler
     
     # Add file handler if specified
     if log_file:
@@ -237,9 +258,12 @@ def setup_logging(console_level=logging.INFO, log_file=None, log_file_level=logg
         # Create a file handler with specified level (typically WARNING or higher)
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setFormatter(file_formatter)
-        file_handler.addFilter(rate_limiting_filter)
         file_handler.setLevel(log_file_level)
-        root_logger.addHandler(file_handler)
+        
+        # Wrap the file handler
+        summary_file_handler = SummaryAwareHandler(file_handler, rate_limiting_filter)
+        summary_file_handler.addFilter(rate_limiting_filter)
+        root_logger.addHandler(summary_file_handler)
     
     # Disable propagation for these common noisy modules
     for logger_name in ['urllib3', 'requests', 'chardet.charsetprober']:
