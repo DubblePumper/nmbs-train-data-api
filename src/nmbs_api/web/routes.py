@@ -18,6 +18,7 @@ from ..api import (
 from .cache import CacheManager
 from ..tests.test_api import test_api
 from .trajectories_endpoint import get_trajectories
+from .config import get_pagination_settings, API_NAME, API_VERSION
 
 # Configure logging
 logger = logging.getLogger(__name__)

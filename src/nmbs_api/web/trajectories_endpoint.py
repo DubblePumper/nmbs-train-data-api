@@ -11,6 +11,9 @@ import csv
 import datetime
 from pathlib import Path
 
+# Import pagination settings
+from .config import get_pagination_settings
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -101,7 +104,7 @@ def load_realtime_data():
         logger.error(f"Error loading realtime data: {e}")
         return None
 
-def get_trajectories(page=0, page_size=20):
+def get_trajectories(page=0, page_size=None):
     """
     Get train trajectories data directly from data files
     
@@ -113,6 +116,18 @@ def get_trajectories(page=0, page_size=20):
         dict: Trajectories data with metadata
     """
     try:
+        # Get pagination settings from config
+        pagination_settings = get_pagination_settings('trajectories')
+        default_size = pagination_settings['default_size']
+        max_size = pagination_settings['max_size']
+        
+        # Apply pagination settings if page_size is not provided
+        if page_size is None:
+            page_size = default_size
+        
+        # Limit page_size to max_size
+        page_size = min(page_size, max_size)
+        
         logger.info(f"Generating trajectories data (page={page}, page_size={page_size})")
         logger.info(f"CACHE_DIR exists: {CACHE_DIR.exists()}")
         logger.info(f"EXTRACTED_DIR exists: {EXTRACTED_DIR.exists()}")

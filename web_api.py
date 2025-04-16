@@ -23,8 +23,9 @@ from nmbs_api import (
 )
 
 # Import the trajectories endpoint functionality
-# Update the import statement to use the correct path
 from src.nmbs_api.web.trajectories_endpoint import get_trajectories
+# Import pagination configuration
+from src.nmbs_api.web.config import get_pagination_settings
 
 # Load environment variables
 load_dotenv()
@@ -212,7 +213,14 @@ def trajectories_data():
     try:
         # Get pagination parameters
         page = int(request.args.get('page', 0))
-        page_size = min(int(request.args.get('limit', 20)), 100)  # Limit page size to avoid overload
+        
+        # Get pagination settings from config for trajectories endpoint
+        pagination_settings = get_pagination_settings('trajectories')
+        default_size = pagination_settings['default_size']
+        max_size = pagination_settings['max_size']
+        
+        # Apply pagination settings with fallback to config values
+        page_size = min(int(request.args.get('limit', default_size)), max_size)
         
         # Get trajectories data directly from cache files (faster than using other API endpoints)
         response = get_trajectories(page=page, page_size=page_size)
