@@ -86,24 +86,28 @@ def setup_request_monitoring(app):
         if request.path == '/metrics':
             return response
         
-        # Record request latency
-        latency = time.time() - g.start_time
-        REQUEST_LATENCY.labels(
-            method=request.method,
-            endpoint=request.path
-        ).observe(latency)
+        # Record request latency - check if start_time exists first
+        if hasattr(g, 'start_time'):
+            latency = time.time() - g.start_time
+            REQUEST_LATENCY.labels(
+                method=request.method,
+                endpoint=request.path
+            ).observe(latency)
+            
+            # Log lange verzoeken (meer dan 1 seconde)
+            if latency > 1:
+                logger.warning(f"Lang verzoek: {request.method} {request.path} duurde {latency:.2f}s")
+        else:
+            # If start_time is not available, still record the request but without latency
+            logger.debug(f"Request zonder start_time: {request.method} {request.path}")
         
-        # Record request count
+        # Record request count - always do this regardless of start_time
         REQUEST_COUNT.labels(
             method=request.method,
             endpoint=request.path,
             status_code=response.status_code
         ).inc()
         
-        # Log lange verzoeken (meer dan 1 seconde)
-        if latency > 1:
-            logger.warning(f"Lang verzoek: {request.method} {request.path} duurde {latency:.2f}s")
-            
         # Log fouten
         if response.status_code >= 400:
             ERROR_COUNT.labels(

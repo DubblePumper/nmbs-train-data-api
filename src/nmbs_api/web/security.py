@@ -95,17 +95,18 @@ def setup_security(app: Flask) -> None:
 def _register_security_middleware(app: Flask) -> None:
     """Register all security middleware with the Flask app"""
     
-    @app.before_request
-    def enforce_https():
-        """Ensure all requests use HTTPS"""
-        # Skip for development environments
-        if request.host.startswith(('localhost', '127.0.0.1')):
-            return None
-            
-        # Check if request is already secure
-        if not request.is_secure:
-            url = request.url.replace('http://', 'https://', 1)
-            return redirect(url, code=301)  # Permanent redirect
+    # HTTPS enforcement disabled to allow all types of connections
+    # @app.before_request
+    # def enforce_https():
+    #     """Ensure all requests use HTTPS"""
+    #     # Skip for development environments
+    #     if request.host.startswith(('localhost', '127.0.0.1')):
+    #         return None
+    #         
+    #     # Check if request is already secure
+    #     if not request.is_secure:
+    #         url = request.url.replace('http://', 'https://', 1)
+    #         return redirect(url, code=301)  # Permanent redirect
     
     @app.before_request
     def validate_input():
