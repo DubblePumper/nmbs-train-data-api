@@ -20,7 +20,28 @@ class ScraperService(BaseService):
     def __init__(self, cache_dir='data', use_proxy=False):
         super().__init__(cache_dir)
         self.nmbs_url = os.getenv('NMBS_DATA_URL')
-        self.user_agent = os.getenv('USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36')
+        
+        # Expanded set of modern user agents to rotate
+        self.user_agents = [
+            # Chrome on Windows
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            # Chrome on macOS
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            # Edge on Windows
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
+            # Firefox on Windows
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+            # Safari on macOS
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
+            # Opera GX
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 OPR/108.0.0.0',
+            # iPhone Safari
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+            # Android Chrome
+            'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+        ]
+        self.user_agent = self.user_agents[0]  # Default to first one
+        self.last_agent_idx = 0
         
         # Proxy settings (disabled by default)
         self.use_proxy = use_proxy
@@ -71,27 +92,12 @@ class ScraperService(BaseService):
             logger.error(traceback.format_exc())
             raise
         
+        # Select a user agent
+        self._rotate_user_agent()
+        
         # Set custom headers to exactly match the user's browser
         logger.debug("Headers instellen om exact overeen te komen met gebruikte browser...")
-        headers = {
-            'authority': 'sncb-opendata.hafas.de',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 OPR/117.0.0.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br, zstd',
-            'Referer': 'https://www.belgiantrain.be/',
-            'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132", "Opera GX";v="117"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'cross-site',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-            'priority': 'u=0, i',
-            'Connection': 'keep-alive',
-            'DNT': '1'
-        }
+        headers = self._get_headers_for_current_agent()
         logger.debug(f"Instellen van exacte headers: {headers}")
         scraper.headers.update(headers)
         
@@ -120,6 +126,77 @@ class ScraperService(BaseService):
             logger.info("Geen cookies bestand gevonden, nieuwe sessie wordt gestart")
         
         return scraper
+    
+    def _rotate_user_agent(self):
+        """Rotate to the next user agent in the list"""
+        self.last_agent_idx = (self.last_agent_idx + 1) % len(self.user_agents)
+        self.user_agent = self.user_agents[self.last_agent_idx]
+        logger.info(f"Rotated to user agent: {self.user_agent}")
+        return self.user_agent
+        
+    def _get_headers_for_current_agent(self):
+        """Get appropriate headers for the current user agent"""
+        # Use the exact headers from a working browser session as the primary option
+        if self.last_agent_idx == 0:  # For the first attempt, use known working headers
+            headers = {
+                'authority': 'www.belgiantrain.be',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 OPR/117.0.0.0',
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'accept-encoding': 'gzip, deflate, br, zstd',
+                'accept-language': 'nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7',
+                'cache-control': 'max-age=0',
+                'sec-ch-ua': '"Not A(Brand";v="8", "Chromium";v="132", "Opera GX";v="117"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'document',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-site': 'none',
+                'sec-fetch-user': '?1',
+                'upgrade-insecure-requests': '1',
+                'priority': 'u=0, i',
+                'referer': 'https://www.belgiantrain.be/'
+            }
+            logger.info("Using exact headers from known working browser session")
+            return headers
+                
+        # Base headers that work for most browsers (for subsequent attempts)
+        headers = {
+            'authority': 'sncb-opendata.hafas.de',
+            'User-Agent': self.user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br, zstd',
+            'Referer': 'https://www.belgiantrain.be/',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'cross-site',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+        }
+        
+        # Add browser-specific headers based on the current user agent
+        if 'OPR/' in self.user_agent:
+            headers['sec-ch-ua'] = '"Not A(Brand";v="8", "Chromium";v="132", "Opera GX";v="117"'
+            headers['sec-ch-ua-mobile'] = '?0'
+            headers['sec-ch-ua-platform'] = '"Windows"'
+        elif 'Chrome/' in self.user_agent and 'Edg/' in self.user_agent:
+            headers['sec-ch-ua'] = '"Microsoft Edge";v="122", "Chromium";v="122", "Not A(Brand";v="24"'
+            headers['sec-ch-ua-mobile'] = '?0'
+            headers['sec-ch-ua-platform'] = '"Windows"'
+        elif 'Chrome/' in self.user_agent:
+            headers['sec-ch-ua'] = '"Chromium";v="122", "Google Chrome";v="122", "Not(A:Brand";v="24"'
+            headers['sec-ch-ua-mobile'] = '?0'
+            headers['sec-ch-ua-platform'] = '"Windows"' if 'Windows' in self.user_agent else ('"macOS"' if 'Mac' in self.user_agent else '"Android"')
+        elif 'Firefox/' in self.user_agent:
+            # Firefox doesn't use the sec-ch-ua headers
+            pass
+        elif 'iPhone' in self.user_agent or 'iPad' in self.user_agent:
+            headers['sec-ch-ua-mobile'] = '?1'
+            headers['sec-ch-ua-platform'] = '"iOS"'
+        
+        return headers
     
     def save_cookies(self):
         """Save the current cookies from the scraper"""
@@ -162,43 +239,117 @@ class ScraperService(BaseService):
             logger.info("Cookies opslaan na succesvol verzoek...")
             self.save_cookies()
             
-            if response.status_code != 200:
+            if response.status_code == 200:
+                # Parse the HTML
+                logger.info("HTML parsen met BeautifulSoup...")
+                content_length = len(response.text)
+                logger.info(f"Ontvangen HTML grootte: {content_length} bytes")
+                
+                # Save the raw HTML response for debugging
+                try:
+                    debug_html_path = os.path.join(self.realtime_dir, 'debug_response.html')
+                    with open(debug_html_path, 'w', encoding='utf-8') as f:
+                        f.write(response.text)
+                    logger.debug(f"Ruwe HTML respons opgeslagen naar {debug_html_path} voor debugging")
+                except Exception as e:
+                    logger.warning(f"Kon ruwe HTML respons niet opslaan: {str(e)}")
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # First get realtime data URL with track changes
+                realtime_success = self._scrape_realtime_url(soup)
+                
+                # Then get planning data URL with platform info
+                planning_success = self._scrape_planning_url(soup)
+                
+                logger.info(f"Website scraping resultaten: Realtime: {realtime_success}, Planning: {planning_success}")
+                logger.info("===== EINDE WEBSCRAPING =====")
+                
+                return realtime_success or planning_success
+            else:
                 logger.error(f"Fout bij ophalen van NMBS website: HTTP status {response.status_code}")
                 logger.error(f"Response inhoud: {response.text[:500]}...")
+                
+                # If we get a Cloudflare 403 error, use hardcoded fallback URLs
+                if response.status_code == 403 and "cloudflare" in response.text.lower():
+                    logger.warning("Cloudflare bescherming gedetecteerd, gebruik hardcoded fallback URLs")
+                    return self._use_fallback_urls()
+                    
                 return False
-            
-            # Parse the HTML
-            logger.info("HTML parsen met BeautifulSoup...")
-            content_length = len(response.text)
-            logger.info(f"Ontvangen HTML grootte: {content_length} bytes")
-            
-            # Save the raw HTML response for debugging
-            try:
-                debug_html_path = os.path.join(self.realtime_dir, 'debug_response.html')
-                with open(debug_html_path, 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                logger.debug(f"Ruwe HTML respons opgeslagen naar {debug_html_path} voor debugging")
-            except Exception as e:
-                logger.warning(f"Kon ruwe HTML respons niet opslaan: {str(e)}")
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # First get realtime data URL with track changes
-            realtime_success = self._scrape_realtime_url(soup)
-            
-            # Then get planning data URL with platform info
-            planning_success = self._scrape_planning_url(soup)
-            
-            logger.info(f"Website scraping resultaten: Realtime: {realtime_success}, Planning: {planning_success}")
-            logger.info("===== EINDE WEBSCRAPING =====")
-            
-            return realtime_success or planning_success
-            
+                
         except Exception as e:
             logger.error(f"Fout bij webscraping: {str(e)}")
             logger.error(traceback.format_exc())
             logger.error("===== WEBSCRAPING MISLUKT =====")
-            return False
+            
+            # Use fallback URLs if scraping fails
+            logger.info("Webscraping mislukt, gebruik hardcoded fallback URLs")
+            return self._use_fallback_urls()
+    
+    def _use_fallback_urls(self):
+        """Use hardcoded fallback URLs when scraping fails"""
+        logger.info("Toepassen van hardcoded fallback URLs")
+        
+        # Use existing hardcoded URLs first
+        if not self.urls:
+            self._load_urls()
+        if not self.planning_urls:
+            self._load_planning_urls()
+            
+        success = False
+            
+        # If we still don't have URLs, use predefined hardcoded fallbacks
+        if not self.urls:
+            logger.info("Gebruik van hardcoded realtime URL")
+            realtime_url = {
+                "real-time gegevens met info over spoorveranderingen": {
+                    'url': "https://sncb-opendata.hafas.de/gtfs/realtime/d22ad6759ee25bg84ddb6c818g4dc4de_TC",
+                    'filename': "NMBS_realtime_met_spoorveranderingen.bin",
+                    'last_checked': self.get_timestamp()
+                }
+            }
+            self.urls = realtime_url
+            self._save_urls()
+            success = True
+            
+        # Try alternative planning data URLs
+        if not self.planning_urls:
+            logger.info("Gebruik van hardcoded planning URL")
+            planning_url = {
+                "planningsgegevens met perroninfo (GTFS)": {
+                    'url': "https://gtfs.irail.be/nmbs/gtfs/latest.zip",
+                    'filename': "NMBS_planning_met_perroninfo.zip",
+                    'last_checked': self.get_timestamp()
+                }
+            }
+            self.planning_urls = planning_url
+            self._save_planning_urls()
+            success = True
+            
+        # Also try to update with alternative URLs if we already have them
+        if self.urls:
+            for name in self.urls:
+                current_url = self.urls[name]['url']
+                if "d22ad6759ee25bg84ddb6c818g4dc4de_TC" in current_url:
+                    logger.info("URL bevat verouderde token, probeer alternatieve URL")
+                    self.urls[name]['url'] = "https://sncb-opendata.hafas.de/gtfs/realtime/d22ad6759ee25bg84ddb6c818g4dc4de_TC"
+                    self.urls[name]['last_checked'] = self.get_timestamp()
+                    self._save_urls()
+                    success = True
+        
+        if self.planning_urls:
+            for name in self.planning_urls:
+                current_url = self.planning_urls[name]['url']
+                # If original URL, try iRail alternative
+                if "d22ad6759ee25bg84ddb6c818g4dc4de_TC" in current_url:
+                    logger.info("Planning URL bevat verouderde token, probeer iRail alternatief")
+                    self.planning_urls[name]['url'] = "https://gtfs.irail.be/nmbs/gtfs/latest.zip"
+                    self.planning_urls[name]['last_checked'] = self.get_timestamp()
+                    self._save_planning_urls()
+                    success = True
+        
+        logger.info(f"Fallback URLs toepassen: {success}")
+        return success
     
     def _scrape_realtime_url(self, soup):
         """Extract realtime data URL with track changes from BeautifulSoup object"""
